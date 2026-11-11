@@ -1,0 +1,8 @@
+{
+  "count": 20,
+  "prompt_sha256": "96560032db9fcf72a0a9834bc39e90c8691ef509d3a0b62f0c4c018ccbd54a38",
+  "pilot_sha256": "e385231a468c02262065ca8c53e705948222f94ed9dde214e7a3eb651565b057",
+  "reviewer": "Codex",
+  "status": "reviewed-before-full",
+  "note": "返工1：逐条核对20条，含PR审查点名4条；3388/2781剥离后可保留，2545因goal操纵而删除，2418明确manipulative。"
+}
