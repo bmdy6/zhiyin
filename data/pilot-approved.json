@@ -1,0 +1,8 @@
+{
+  "count": 20,
+  "prompt_sha256": "0743e0ecb4f08f330c247a7c5beb15e66e091c4992de3d2dd8267a1d83f52e37",
+  "pilot_sha256": "08a0db6a964f573a2967fd0d91c01bba3fc0d8e57cc1d7137eb8ff8fc37090a9",
+  "reviewer": "Codex",
+  "status": "reviewed-before-full",
+  "note": "逐条复核20条最终决策；提示词重跑修正后通过，后续规则增强后再离线复核；非Claude人工验收。"
+}

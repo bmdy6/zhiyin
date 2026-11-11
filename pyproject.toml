@@ -1,0 +1,16 @@
+[project]
+name = "chat-twin"
+version = "0.1.0"
+description = "Round 1: reproducible cleaning of public qingsheng samples"
+requires-python = ">=3.11"
+dependencies = ["httpx>=0.28,<1", "numpy>=2,<3", "fastembed>=0.7,<1"]
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "ruff>=0.14,<1"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
