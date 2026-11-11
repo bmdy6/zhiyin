@@ -12,7 +12,7 @@ uv run pytest -q
 uv run python scripts/clean.py --pilot
 ```
 
-查看 `data/pilot.jsonl` 的 20 条完整输入、标签和最终决策，核对 `data/PILOT.md`。只有检查提示词有效后才能启动全量；提示词变化后旧批准失效。批准文件的字段为 `count: 20`、`prompt_sha256`、`pilot_sha256`、`reviewer`、`status`、`note`，使用当前文件的 SHA-256。例如人工核对完成后用 Python 更新两个摘要：
+查看 `data/pilot.jsonl` 的 20 条完整输入、标签和最终决策，核对 `data/PILOT.md`。返工1的试跑覆盖两种来源、16种阶段原名及PR审查点名的4条回归样本。只有检查提示词有效后才能启动全量；提示词变化后旧批准失效。批准文件的字段为 `count: 20`、`prompt_sha256`、`pilot_sha256`、`reviewer`、`status`、`note`，使用当前文件的 SHA-256。例如人工核对完成后用 Python 更新两个摘要：
 
 ```python
 import hashlib
@@ -47,12 +47,12 @@ uv run python -m compileall -q scripts
 - `data/raw/`、`data/cache/` 被 Git 忽略。原件、模型、逐条 API 缓存、向量矩阵均只留本机。`--offline` 要求它们都已缓存，否则失败，不联网。
 - `data/samples.jsonl` 是保留集；`data/samples.dropped.jsonl` 是删除集，含 reason 和判断依据。`data/labels.jsonl` 保留所有1437条的模型标签、token用量、输入摘要，不含密钥。
 - 先规则，后 LLM。全部条目均打标签；规则优先；没有规则命中的情况下，模型 `review=true` 或置信度 <0.9 一律保留并标 review。称呼、隐喻及互动意图不明确时另标 review（词表见 `apply_label`）。最多3次尝试，API/标签校验失败也保留 review，不把失败写入成功缓存。多重原因只计一个，以规则先后顺序为准。
-- 规则顺序为 broken → vulgar → manipulative → not_sendable。括号动作、策略说明和 >60 Unicode 字符的回复按原文删除，不自动裁剪/改写。
+- 规则顺序为 broken → vulgar → manipulative → not_sendable。规则判断前，只剥离回复首尾≤15个Unicode字符、可确认为语气/表情/动作说明的括号，记录 `stripped_annotation`（多项以换行分隔）和完整 `original_reply`；剩余回复重新检查规则、60字限制和LLM。中间括号、长标注、多轮/条件剧本不剥离，仍按不可直接发送处理；不改写台词。
 - 阶段数字按上游原编号，名称原样保留：两个阶段5仍分别叫“升温推进”“约会实战”。示例库“挽回/冷激活”无编号，暂映射7并 review。不同来源的同号阶段名称可能不同，未擅自统一。
 - 无台词或纯括号状态描述的 her 设为空，原描述并入 context。示例未提供 goal，存空字符串；why 完整保留。
 - 最后仅对尚未删除的项，用 fastembed 的 `BAAI/bge-small-zh-v1.5`、CPU 编码 `her + 换行 + reply`，L2 归一化后余弦相似度严格 >0.92 删除，保留输入顺序中的第一条。记录 `duplicate_of` 和 `similarity`；不通过被删项形成传递重复链。
-- `data/REPORT.md` 列出阶段统计、保留/删除各30条原文（固定随机种子20261112）、限制与待审点；MIT 许可全文见 `data/ATTRIBUTION.md`。
+- `data/REPORT.md` 列出阶段统计、保留/删除各30条原文（返工1新随机种子2026111201，前版为20261112）、限制与待审点；MIT 许可全文见 `data/ATTRIBUTION.md`。
 
 本仓目前是脚本项目，无应用或分发包构建；使用 compileall 检查字节码编译。测试包含解析、两个阶段5、四类删除各至少2例、边界、去重、标签契约和离线/API失败路径。
 
-Claude 仍需独立抽查 REPORT 中的60条，误删或漏删 ≤3 才算第1轮人工验收通过。这个 PR 不合并，也不开始后两轮。
+首轮Claude抽查约5处误删/漏删，未达到标准。本次返工强化 `goal/why` 的目的判定：即使回复字面正常，绕过同意、故意制造不安、贬低他人抬高自己的目的仍判操纵；普通幽默、主导话题和自信本身不触发。Claude 仍需独立抽查新 REPORT 中的60条，误删或漏删 ≤3 才算第1轮人工验收通过。这个 PR 不合并，也不开始后两轮。

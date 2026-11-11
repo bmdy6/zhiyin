@@ -176,6 +176,7 @@ def test_llm_uses_disabled_thinking_and_cache(monkeypatch, tmp_path):
         calls.append(payload)
         assert payload["model"] == "deepseek-flash"
         assert payload["thinking"] == {"type": "disabled"}
+        assert json.loads(payload["messages"][1]["content"])["goal"] == sample()["goal"]
         assert request.headers["Authorization"] == "Bearer synthetic-test-key"
         return httpx.Response(
             200,
@@ -346,3 +347,136 @@ def test_repackaging_phone_refusal_is_manipulative():
     row["her"] = "我不习惯给陌生人电话"
     row["reply"] = "说得对，绝不能习惯！就留这一次，下不为例。"
     assert rule_reason(row)[0] == "manipulative"
+
+
+@pytest.mark.parametrize(
+    "reply,cleaned,annotation",
+    [
+        ("我绝对没对早餐店的阿姨这样过（幽默化解）", "我绝对没对早餐店的阿姨这样过", "幽默化解"),
+        (
+            "我知道，这完全是我们两个人之间的事（轻松语气，不进不退）",
+            "我知道，这完全是我们两个人之间的事",
+            "轻松语气，不进不退",
+        ),
+        ("明晚7点有家店会把你变成海盗（眨眼表情）", "明晚7点有家店会把你变成海盗", "眨眼表情"),
+        ("(微笑)你好", "你好", "微笑"),
+        ("（微笑）你好（眨眼）", "你好", "微笑\n眨眼"),
+        ("你好（语气轻松自然，带一点俏皮和笑意）", "你好", "语气轻松自然，带一点俏皮和笑意"),
+    ],
+)
+def test_strip_only_short_edge_annotations(reply, cleaned, annotation):
+    from scripts.clean import strip_annotations
+
+    row = sample()
+    row["reply"] = reply
+    result = strip_annotations(row)
+    assert result["reply"] == cleaned
+    assert result["stripped_annotation"] == annotation
+    assert result["original_reply"] == reply
+    assert row["reply"] == reply  # Parsing input is not mutated.
+    assert strip_annotations(result) == result
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "你最近怎么样（她说有）那就好",
+        "你好（确认位置后）再见",
+        "（她说有）那就好",
+        "你好（确认位置后）",
+        "你好（语气轻松自然，带一点俏皮和笑意呀）",  # 16 chars is too long.
+        "我吃了饺子（韭菜馅的）",
+        "你好（我也喜欢微笑）",
+        "（微笑）",  # No spoken reply remains.
+        "你好（微笑)",  # Mismatched parentheses are never guessed at.
+    ],
+)
+def test_do_not_strip_scripts_long_annotations_or_spoken_asides(reply):
+    from scripts.clean import strip_annotations
+
+    row = sample()
+    row["reply"] = reply
+    assert strip_annotations(row) == row
+    assert "stripped_annotation" not in strip_annotations(row)
+
+
+@pytest.mark.parametrize(
+    "goal",
+    [
+        "无需征求同意，就可以继续行动",
+        "去掉说不的空间",
+        "让她体面接受",
+        "她需要的不是事实，而是一个能让自己体面接受的心理框架。这个回应提供了借口。",
+        "故意制造焦虑来吸引她",
+        "贬低对方来抬高自己",
+    ],
+)
+def test_goal_can_make_an_ordinary_reply_manipulative(goal):
+    row = sample()
+    row["goal"] = goal
+    assert rule_reason(row)[0] == "manipulative"
+
+
+@pytest.mark.parametrize(
+    "goal",
+    [
+        "幽默接话",
+        "主导话题但尊重她的选择",
+        "保持自信",
+        "不要故意制造焦虑",
+        "避免贬低对方来抬高自己",
+    ],
+)
+def test_goal_does_not_confuse_confidence_or_negation_with_manipulation(goal):
+    row = sample()
+    row["goal"] = goal
+    assert rule_reason(row) is None
+
+
+def test_strip_spaced_annotation_preserves_exact_note():
+    from scripts.clean import strip_annotations
+
+    row = sample()
+    row["reply"] = "你好（ 微笑 ）"
+    result = strip_annotations(row)
+    assert result["reply"] == "你好"
+    assert result["stripped_annotation"] == " 微笑 "
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "你好（停顿等她反应，随即拉过来舌吻）",
+        "你好（停顿，等她再次邀请）",
+    ],
+)
+def test_even_a_short_edge_note_cannot_hide_a_conditional_script(reply):
+    from scripts.clean import strip_annotations
+
+    row = sample()
+    row["reply"] = reply
+    assert strip_annotations(row) == row
+    assert rule_reason(strip_annotations(row))[0] == "not_sendable"
+
+
+@pytest.mark.parametrize(
+    "reply,cleaned,annotation",
+    [
+        ("（送三个拥抱表情）你好", "你好", "送三个拥抱表情"),
+        ("你好（苦笑，示意她去看那对情侣）", "你好", "苦笑，示意她去看那对情侣"),
+        ("（立刻打回去）刚才是我不对", "刚才是我不对", "立刻打回去"),
+    ],
+)
+def test_compound_edge_expressions_and_simple_actions(reply, cleaned, annotation):
+    from scripts.clean import strip_annotations
+
+    row = sample()
+    row["reply"] = reply
+    result = strip_annotations(row)
+    assert result["reply"] == cleaned and result["stripped_annotation"] == annotation
+
+
+def test_phone_number_placeholder_is_not_directly_sendable():
+    row = sample()
+    row["reply"] = "如需人工服务请拨 [自己号码]，谢谢合作"
+    assert rule_reason(row)[0] == "not_sendable"

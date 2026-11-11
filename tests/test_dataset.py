@@ -64,3 +64,40 @@ def test_report_includes_exactly_thirty_originals_from_each_partition():
         source = {r["id"]: r for r in load(name)}
         assert len(excerpts) == len({r["id"] for r in excerpts}) == 30
         assert all(row == source[row["id"]] for row in excerpts)
+
+
+def test_rework_annotation_provenance_and_named_regressions():
+    rows = load("samples.jsonl") + load("samples.dropped.jsonl")
+    annotated = [r for r in rows if "stripped_annotation" in r]
+    assert annotated
+    for row in annotated:
+        assert row["original_reply"] != row["reply"]
+        assert all(0 < len(note) <= 15 for note in row["stripped_annotation"].splitlines())
+    by_id = {r["id"]: r for r in rows}
+    for sample_id, annotation in [
+        ("qs-c-3388", "幽默化解"),
+        ("qs-c-2545", "轻松语气，不进不退"),
+        ("qs-c-2781", "眨眼表情"),
+    ]:
+        row = by_id[sample_id]
+        assert row["stripped_annotation"] == annotation
+        assert row["reply"] == row["original_reply"].removesuffix(f"（{annotation}）")
+        assert row.get("reason") != "not_sendable"
+    assert by_id["qs-c-2418"]["reason"] == "manipulative"
+
+
+def test_report_uses_the_new_rework_seed():
+    import random
+
+    from scripts.clean import REPORT_SEED
+
+    assert REPORT_SEED != 20261112
+    text = (DATA / "REPORT.md").read_text()
+    assert str(REPORT_SEED) in text
+    sections = text.split("## 随机30条保留")[1].split("## 随机30条删除")
+    for section, name in zip(sections, ("samples.jsonl", "samples.dropped.jsonl")):
+        actual = [
+            json.loads(s)["id"] for s in re.findall(r"```json\n(.*?)\n```", section, re.DOTALL)
+        ]
+        expected = [r["id"] for r in random.Random(REPORT_SEED).sample(load(name), 30)]
+        assert actual == expected

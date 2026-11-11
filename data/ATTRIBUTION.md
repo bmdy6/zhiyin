@@ -4,7 +4,7 @@
 
 固定提交：`fd762df2e0ce4b8ec68b0087ba7178761045bd1a`。仅使用 evals/evals_candidates_v1.json 和 skill/references/examples-library.md；未使用 chatlogs。
 
-样本/报告摘录为上游作品的解析与筛选，保留原文；标签、删除依据由本项目生成。上游 MIT 许可全文如下：
+样本/报告摘录为上游作品的解析与筛选；仅剥离首尾≤15字的纯标注，以original_reply与stripped_annotation保留改动依据；其他台词不改写。标签、删除依据由本项目生成。上游 MIT 许可全文如下：
 
 ```text
 MIT License

@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SHA = "fd762df2e0ce4b8ec68b0087ba7178761045bd1a"
 MODEL = "deepseek-flash"
 EMBED_MODEL = "BAAI/bge-small-zh-v1.5"
+REPORT_SEED = 2026111201
 REASONS = ("vulgar", "manipulative", "not_sendable", "duplicate", "broken")
 SOURCES = {
     "evals_candidates_v1.json": (
@@ -185,6 +186,57 @@ def parse_examples(text: str) -> list[dict]:
     return rows
 
 
+def strip_annotations(row: dict) -> dict:
+    """Remove only short edge tone/action notes; keep the exact source for audit."""
+    pair = re.compile(r"（([^（）()]*)）|\(([^（）()]*)\)")
+
+    def annotation(match):
+        original_note = next(g for g in match.groups() if g is not None)
+        content = original_note.strip()
+        if not 1 <= len(original_note) <= 15 or re.search(
+            r"她(?:说|问|答)|对方(?:说|问|答)|确认.*后|等待|等(?:她|对方)|等.*(?:后|回应|反应)|随即|然后|随后|继续|方案|故事|如果|因为|我|你|[“”\"「」]",
+            content,
+        ):
+            return None
+        # Positive tone/action recognition: ordinary parenthetical speech is not metadata.
+        pattern = (
+            r"(?:幽默化解|语气.+|.+语气|轻松语气，不进不退|轻松(?:地|风趣地)?"
+            r"|(?:附|配|配上|配合|送[一二三四五六七八九十\d]+个)?(?:笑|微笑|坏笑|苦笑|小坏笑|俏皮笑|轻松笑|偷笑|笑哭|笑脸|眨眼|惊讶|夸张惊讶|委屈|拥抱)(?:表情|笑意)?"
+            r"|微笑(?:转身|扬左眉|转移话题)|淡定|突然严肃|轻声(?:温柔|细语)?"
+            r"|指(?:着|了指|向).+|伸(?:出)?手(?:动作|示意)?|自然伸出手|手按.+|张开双臂"
+            r"|轻触.+|捏脸|拿起她的手|平静地看着她|凝视\d+秒|走过时停下，转头"
+            r"|(?:轻轻|自然|缓缓|同时|顺手|直接|突然|立刻)?(?:点头|摇头|转头|转身|回头|挑眉|停顿|起身|伸手|掏出|递上|放下|压低声音|把头转向|张开|抬手|举杯|示意|打回去).*)"
+        )
+        parts = re.split(r"[，,、]", content)
+        if re.fullmatch(pattern, content) or (
+            len(parts) > 1 and all(re.fullmatch(pattern, part.strip()) for part in parts)
+        ):
+            return original_note
+        return None
+
+    reply = row["reply"]
+    remaining = reply.strip()
+    prefix, suffix = [], []
+    while match := pair.match(remaining):
+        if (note := annotation(match)) is None:
+            break
+        prefix.append(note)
+        remaining = remaining[match.end() :].lstrip()
+    while remaining:
+        matches = list(pair.finditer(remaining))
+        if not matches or (match := matches[-1]).end() != len(remaining):
+            break
+        if (note := annotation(match)) is None:
+            break
+        suffix.insert(0, note)
+        remaining = remaining[: match.start()].rstrip()
+    if not remaining or not prefix + suffix:
+        return row
+    return dict(
+        row, reply=remaining, original_reply=reply, stripped_annotation="\n".join(prefix + suffix)
+    )
+
+
 def rule_reason(row: dict) -> tuple[str, str] | None:
     reply = row["reply"]
     if not reply.strip():
@@ -201,7 +253,9 @@ def rule_reason(row: dict) -> tuple[str, str] | None:
     for match in re.finditer(
         r"故意制造不安|打压自信|废物测试|制造[^。；]*失去感|假装不在乎"
         r"|拒绝成本[极很]高|不给对方[^。；]*拒绝[^。；]*空间"
-        r"|(?:不是|而不是)接受拒绝|找不到继续拒绝的着力点",
+        r"|(?:不是|而不是)接受拒绝|找不到继续拒绝的着力点"
+        r"|无需征求同意|去掉[^。；]*说不[^。；]*空间|(?:能让|让).{0,8}体面接受"
+        r"|故意制造(?:焦虑|不安)|贬低对方[^。；]*抬高自己",
         strategy,
     ):
         prefix = strategy[max(0, match.start() - 6) : match.start()]
@@ -211,7 +265,7 @@ def rule_reason(row: dict) -> tuple[str, str] | None:
         return "not_sendable", f"reply {len(reply)} 字符 > 60"
     if re.search(
         r"[（(][^）)]+[）)]|主推话术|备选[（(:：]|伸出手说|突然停下说|继续坐着吃完|表现得像|保持平静地继续"
-        r"|\[[^\]]*(?:附上|插入|填写|展览类型)[^\]]*\]"
+        r"|\[[^\]]*(?:附上|插入|填写|展览类型|自己(?:的)?(?:号码|电话)|你的(?:名字|号码))[^\]]*\]"
         r"|^(?:笑一下|微笑|点头|摇头|停顿|看着她).{0,20}(?:说|回复|回答)[:：]",
         reply,
     ):
@@ -414,7 +468,9 @@ def pilot_rows(rows: list[dict]) -> list[dict]:
     for row in rows:
         groups.setdefault((row["source"], row["stage"], row["stage_name"]), []).append(row)
     picked = [rng.choice(group) for group in groups.values()]
-    # 8 candidate groups + 8 example groups =16; fill to20 across all sources.
+    # Cover each original stage name plus the four PR review regressions (20 total).
+    regression_ids = {"qs-c-3388", "qs-c-2545", "qs-c-2781", "qs-c-2418"}
+    picked.extend(r for r in rows if r["id"] in regression_ids and r not in picked)
     used = {r["id"] for r in picked}
     picked.extend(rng.sample([r for r in rows if r["id"] not in used], 20 - len(picked)))
     return picked
@@ -465,7 +521,9 @@ def report(rows, kept, dropped, audits, data):
             "- stage 保留上游数字及原名，两个阶段5不合并名称；示例库“挽回/冷激活”没有数字，暂映射7并 review。",
             "- 无台词/纯括号状态写入 context，her 为空。示例的 goal 上游未提供，存空字符串，why 保留完整解释。",
             f"- 去重用 `{EMBED_MODEL}`（fastembed，CPU）对 `her + 换行 + reply` 编码，L2 归一化，余弦严格 >0.92；按候选源后示例源顺序只比较已保留项，不通过已删除项传递。",
-            "- 固定随机种子 20261112，从最终保留/删除集合各独立抽30条，下面贴全部字段原文；未改写或裁剪回复。重复项有 duplicate_of 和 similarity 可回查。",
+            f"- 返工1报告使用新随机种子 {REPORT_SEED}（前版20261112），从最终保留/删除集合各独立抽30条，贴全部字段。重复项有 duplicate_of 和 similarity 可回查。",
+            f"- 首尾≤15字的纯语气/表情/动作标注共剥离 {sum('stripped_annotation' in r for r in rows)} 条；仅去除标注，剩余台词重新过规则和LLM。original_reply保留精确原文，stripped_annotation记录原括号内容（多项以换行分隔）；中间括号、多轮/条件剧本及长标注不剥离。",
+            "- PR首轮Claude抽查约5处误删/漏删，未通过≤3标准。本报告是返工后新样本，尚待Claude重新抽查。",
             "- broken 计数为0不表示人工质量验收通过。Claude 尚需独立抽查以下60条，误删或漏删 ≤3才满足 Issue 人工验收。",
             "",
             "## 原文件 SHA-256（缓存不提交）",
@@ -475,7 +533,7 @@ def report(rows, kept, dropped, audits, data):
     lines += [f"- `{name}`: `{checksum}`" for name, (_, checksum) in SOURCES.items()]
     for title, collection in [("随机30条保留", kept), ("随机30条删除", dropped)]:
         lines += ["", f"## {title}", ""]
-        for row in random.Random(20261112).sample(collection, min(30, len(collection))):
+        for row in random.Random(REPORT_SEED).sample(collection, min(30, len(collection))):
             lines += [
                 f"### {row['id']}",
                 "",
@@ -518,7 +576,7 @@ def main():
     examples = parse_examples((data / "raw/examples-library.md").read_text())
     if len(rows) != 1395 or len(examples) != 42:
         raise ValueError("Unexpected source counts")
-    rows += examples
+    rows = [strip_annotations(row) for row in rows + examples]
     prompt = (ROOT / "prompts/label.txt").read_text()
     if args.full:
         validate_pilot(data, prompt)
@@ -566,7 +624,7 @@ def main():
     report(rows, kept, dropped, [audits[r["id"]] for r in rows], data)
     license_text = (data / "raw/LICENSE").read_text()
     (data / "ATTRIBUTION.md").write_text(
-        f"# Attribution\n\n来源：[tomwong001/qingsheng-skill](https://github.com/tomwong001/qingsheng-skill/tree/{SHA})\n\n固定提交：`{SHA}`。仅使用 evals/evals_candidates_v1.json 和 skill/references/examples-library.md；未使用 chatlogs。\n\n样本/报告摘录为上游作品的解析与筛选，保留原文；标签、删除依据由本项目生成。上游 MIT 许可全文如下：\n\n```text\n{license_text}```\n",
+        f"# Attribution\n\n来源：[tomwong001/qingsheng-skill](https://github.com/tomwong001/qingsheng-skill/tree/{SHA})\n\n固定提交：`{SHA}`。仅使用 evals/evals_candidates_v1.json 和 skill/references/examples-library.md；未使用 chatlogs。\n\n样本/报告摘录为上游作品的解析与筛选；仅剥离首尾≤15字的纯标注，以original_reply与stripped_annotation保留改动依据；其他台词不改写。标签、删除依据由本项目生成。上游 MIT 许可全文如下：\n\n```text\n{license_text}```\n",
         encoding="utf-8",
     )
     print(
