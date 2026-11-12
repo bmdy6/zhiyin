@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "model": "BAAI/bge-small-zh-v1.5",
+  "count": 788,
+  "dimension": 512,
+  "text": "her + newline + context",
+  "samples_sha256": "ae3c4234656453ebe8eac871a7d37b303ffea7465db8a7ba2a9e168cea0413f9",
+  "files": {
+    "documents.json": "9754929b5ec2865237a086cbf1aebeacc4beb2fe0a3fd199bfd268c875291c81",
+    "tokens.json": "fbc2ca62c60c1cabf44fcce9b3f12fc47617678b28b557a7e3776787c8ec48f2",
+    "vectors.npy": "ac83acd2c9a0cd490eb912995b02ea2163912c5f82f2d1a5fdb6aeade3acadd3"
+  }
+}
