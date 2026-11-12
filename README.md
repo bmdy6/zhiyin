@@ -1,10 +1,56 @@
 # chat-twin
 
-聊天分身：用自己的口吻聊天。已完成 [Issue #1](https://github.com/bmdy6/chat-twin/issues/1) 第1轮公开样本清洗；本分支实现第2轮本地检索 MCP。第3轮草稿引擎尚未开始。
+聊天分身：用自己的口吻聊天。已完成 [Issue #1](https://github.com/bmdy6/chat-twin/issues/1) 第1轮公开样本清洗、第2轮本地检索 MCP；本分支实现第3轮命令行草稿引擎。只出草稿，始终由本人决定是否发送。
+
+## 第3轮草稿：命令与边界
+
+```bash
+uv sync --locked
+# 输入是UTF-8，每行 我: / 她: / 他:，最后一条必须来自对方
+uv run --locked chat-twin draft --platform soul --contact 小鱼 --input /path/to/chat.txt
+uv run --locked chat-twin draft --platform soul --contact 小鱼 --input /path/to/chat.txt --goal "自然接话"
+uv run --locked chat-twin promote --platform soul --contact 小鱼
+```
+
+首次仍须按第2轮说明准备本地向量模型。草稿要调用 DeepSeek API；`uv run --offline` 只控制 uv 的依赖解析，不代表草稿模型离线。模型固定 `deepseek-flash`、`thinking.type=disabled`（[官方参数说明](https://api-docs.deepseek.com/guides/thinking_mode/)），只读个人 vault 的 `model-providers.deepseek.DEEPSEEK_API_KEY.value`；不支持环境变量覆盖或回退到其他模型/key。输入最多10000字符、100条消息；goal最多500字符。
+
+分析 → 决策 → **第2轮真实 stdio MCP** 检索5条 → 写 → 本地规则与模型语义自检。4份提示词分别位于 `prompts/analyze.txt`、`decide.txt`、`write.txt`、`check.txt`。JSON字段严格校验。熟人标记 `friend`，向现有MCP传 `stage=None`，避免硬套追求阶段；数字阶段按±1过滤。
+
+输出为 `[等待 0分钟]`、1–3条 `[发送]` 和一条 `[理由]`。`[发送]` 是可复制的草稿标签，程序没有任何发送能力。每条≤40个Unicode字符，不带括号、Markdown和破折号；逐条去标点、NFKC归一后用 `difflib.SequenceMatcher.ratio()` 比较检索结果，严格>0.85算照抄，也拦截完全相同及拆条照抄。另拦截连续16个归一化字的档案原文回显；语义自检再判断承诺、事实、口吻和套路。首次不通过会把具体问题仅在内存里反馈给写作步骤，只重写一次，仍失败即 `[交给你]`，不展示失败草稿。
+
+涉及身份确认、钱/投资、见面/联络方式、严重负面情绪、承诺/私人信息直接交回；关键词先拦最后一条及goal，模型决策和自检结合完整上下文补足语义。未知项≥3直接交回，少于3项但妨碍安全作答也由模型交回；这不是完整的风险识别保证。goal要求邀约同样交回，例如 Issue 示例中的 `--goal "约周末看展"` 不会绕过见面边界。决策为“先不回”则输出 `[先不回]` 和理由，不强凑草稿。等待默认0分钟，不用于制造稀缺感。
+
+文风仅在运行时读 `~/.style-polish/spoken.md`，缺失时用公开 `profiles/example.md` 并在输出提示；存在但不可读、空或异常大则交回。档案内容仅作为写作/自检的模型输入，不在本地缓存、请求日志、联系人记录、评测报告或仓库保存。输入对话、联系人上下文、goal会送到 DeepSeek；原始聊天文件由本人提供和保管。公开样本只借接话方向，口吻按档案；固定上游原则及MIT许可见 `vendor/tong-jincheng/ATTRIBUTION.md`，不启用原Skill的角色扮演或照搬套路。
+
+联系人默认只写 `~/.chat-twin/`：
+
+- `总文档.md` 每人一行：平台、昵称、认识方式、输入摘要、阶段、最后日期。没有证据的认识方式标“未记录”。
+- `state.json` 保存日期集合等内部状态；同一天重复运行只计一天，第三个不同本机日期自动建 `contacts/<平台>/<昵称>.md`，也可手动 `promote`。手动升级不伪造聊天日期。
+- 有独立档案优先读档案，否则只读总文档该行；独立档案保留简介、说话分寸、长期记忆和未完的事等人工内容，只替换标记内最近摘要。长期记忆由本人补充，不自动推断。
+- 只记输入概况，草稿不算已经发送或达成承诺；敏感直交回不保存原句。目录权限0700、文件0600，本地锁和逐文件原子替换；拒绝路径穿越和存储路径符号链接（只允许macOS标准 `/var`、`/tmp` 系统别名）。`state.json`为内部记录源，不支持手动编辑总表后自动反向导入。
+- `--state-dir` 仅给测试隔离用，只允许系统临时目录下的子目录；正式数据仍用默认位置。所有自动测试与合成评测都显式使用临时目录。
+
+### 第3轮验证
+
+```bash
+# 离线单测，不调用聊天模型；包括真实MCP生命周期回归
+uv run --locked --offline pytest -q
+uv run --locked --offline ruff check chat_twin scripts tests
+uv run --locked --offline ruff format --check chat_twin scripts tests
+uv run --locked --offline python -m compileall -q chat_twin scripts
+uv build
+# 会调用付费DeepSeek，用本机文风；联系人临时目录自动清理
+# 已有报告拒绝覆盖，复跑请指定新文件
+uv run --locked python -m scripts.eval_draft --output /tmp/draft-results-rerun.json
+```
+
+固定合成集 `tests/fixtures/draft.jsonl` 含10段普通闲聊、5段需交回和5段熟人对话。熟人上下文仅在临时联系人记录中预置为friend；每段重新分析/决策，并用真实stdio检索。评测只留生成输出、阶段、样本ID、重写次数、模型/usage等非敏感元数据，不存档案和模型请求。最终结果见 `evals/draft-results.json`，5段完整输出见 PR。合成集通过不等于真实聊天效果或主观口吻已获本人/Claude认可。
+
+安装wheel后，提示词、公开回退档案、联系人模板和vendor许可随包分发；检索索引及模型缓存仍通过 `--index-dir` / `--model-cache` 指定绝对路径，不打包私有运行时数据。
 
 ## 第2轮检索：安装与启动
 
-只检索公开样本，不生成草稿、不发送消息，也不存查询。需要 Python 3.11+ 与 uv。在仓库根目录执行：
+第2轮MCP只检索公开样本，不生成草稿、不发送消息，也不存查询。需要 Python 3.11+ 与 uv。在仓库根目录执行：
 
 ```bash
 uv sync --locked

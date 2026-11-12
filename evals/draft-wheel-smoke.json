@@ -1,0 +1,16 @@
+{
+  "wheel_sha256": "84d81c99e5742d557c34c9478e9f326760cc6fcd866649383a04c96c216c9f40",
+  "installed_package": true,
+  "cwd_outside_repository": true,
+  "dependencies": "reused locked environment through .pth, no editable chat_twin import",
+  "model": "deepseek-flash",
+  "thinking": "disabled",
+  "transport": "official MCP stdio",
+  "checks": [
+    "bundled prompts/profiles/vendor license",
+    "installed CLI draft with real model and runtime profile",
+    "installed CLI manual promote",
+    "temporary state cleaned"
+  ],
+  "output": "[等待 0分钟]\n[发送] 胖猫赖着不走，估计是看上你了\n[理由] 对方分享轻松日常，顺着趣事接一句玩笑最自然"
+}
