@@ -480,3 +480,19 @@ def test_phone_number_placeholder_is_not_directly_sendable():
     row = sample()
     row["reply"] = "如需人工服务请拨 [自己号码]，谢谢合作"
     assert rule_reason(row)[0] == "not_sendable"
+
+
+def test_round2_leftover_rules():
+    from scripts.clean import strip_annotations
+
+    row = sample()
+    row["reply"] = "哦是阿，不过他还没到（坚持目送）"
+    row = strip_annotations(row)
+    assert row["reply"] == "哦是阿，不过他还没到"
+    assert row["stripped_annotation"] == "坚持目送"
+    assert rule_reason(row) is None
+    row["reply"] = "那正好，我帮你动"
+    row["goal"] = "利用双义误解制造轻微的张力感"
+    assert rule_reason(row)[0] == "vulgar"
+    row["goal"] = "帮忙搬家移动家具"
+    assert rule_reason(row) is None

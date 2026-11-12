@@ -1,0 +1,16 @@
+{
+  "seed": 2026111202,
+  "count": 50,
+  "eligible_count": 652,
+  "sampling": "uniform without replacement from retained nonempty her",
+  "samples_sha256": "ae3c4234656453ebe8eac871a7d37b303ffea7465db8a7ba2a9e168cea0413f9",
+  "eval_sha256": "eab839f57afa36186fd1e096136bc3dc8e7a725a53ce1695eee19c9f4e2d91e7",
+  "model": "deepseek-flash",
+  "thinking": {
+    "type": "disabled"
+  },
+  "temperature": 0,
+  "prompt": "把用户给出的一句中文聊天消息改写成意思相同、说法不同的一句口语。保留全部事实、情绪、语气、疑问或请求；不要回答消息，不加情节、称呼、场景或解释。不要仅改标点或空格。只返回JSON对象，格式：{\"query\":\"改写后的消息\"}。",
+  "prompt_sha256": "6b93ebf8e6cad7843b60ea0d8128db4da770c4ef23c585ab85f5ab6bb2a0e11a",
+  "query_input": "her only; no context, reply, goal or stage sent to LLM"
+}

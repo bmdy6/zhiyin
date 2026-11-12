@@ -1,0 +1,25 @@
+{
+  "transport": "stdio",
+  "entrypoint": "chat-twin-mcp",
+  "tools": [
+    "list_stages",
+    "search_samples"
+  ],
+  "queries": 50,
+  "hits_at_5": 42,
+  "recall_at_5": 0.84,
+  "p95_ms": 3.8599730999999986,
+  "max_ms": 4.164666,
+  "excluded": "initialize/model load and warm-up call",
+  "eval_sha256": "eab839f57afa36186fd1e096136bc3dc8e7a725a53ce1695eee19c9f4e2d91e7",
+  "checks": [
+    "initialize",
+    "list_tools",
+    "list_stages",
+    "search_samples",
+    "stage+scene filters",
+    "invalid input",
+    "unknown tool",
+    "clean shutdown"
+  ]
+}

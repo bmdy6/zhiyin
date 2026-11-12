@@ -1,0 +1,692 @@
+{
+  "count": 50,
+  "hits_at_5": 42,
+  "recall_at_5": 0.84,
+  "filters": {
+    "stage": null,
+    "scene": null
+  },
+  "candidates_per_lane": 30,
+  "rrf_constant": 60,
+  "latency": {
+    "unit": "ms",
+    "queries": 250,
+    "repeats": 5,
+    "p50": 1.3945210000000001,
+    "p95": 2.5392001499999997,
+    "max": 2.778666,
+    "excluded": "model initialization and first warm-up search",
+    "measurement": "in-process search_samples core, k=5, no filters"
+  },
+  "cases": [
+    {
+      "expected_id": "qs-c-2021",
+      "query": "你老是这么跟女生搭讪的吗？",
+      "hit": false,
+      "rank": 10,
+      "top5": [
+        "qs-c-2003",
+        "qs-c-2163",
+        "qs-c-2338",
+        "qs-c-2029",
+        "qs-c-2627"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2517",
+      "query": "哇！这是怎么弄的呀！快教教我",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-2517",
+        "qs-c-2820",
+        "qs-c-3027",
+        "qs-c-2112",
+        "qs-c-2022"
+      ]
+    },
+    {
+      "expected_id": "qs-c-3151",
+      "query": "我太累了，给我按按摩呗",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-3151",
+        "qs-c-2116",
+        "qs-c-2638",
+        "qs-c-2734",
+        "qs-c-2089"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2784",
+      "query": "咋啦？这么想见我呀？",
+      "hit": true,
+      "rank": 4,
+      "top5": [
+        "qs-c-2623",
+        "qs-c-2155",
+        "qs-c-2556",
+        "qs-c-2784",
+        "qs-c-3027"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2041",
+      "query": "我特别佩服马斯克那种敢冒险的劲儿",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-2041",
+        "qs-c-3332",
+        "qs-c-2408",
+        "qs-e-15",
+        "qs-c-2138"
+      ]
+    },
+    {
+      "expected_id": "qs-c-3149",
+      "query": "猪脑袋",
+      "hit": true,
+      "rank": 2,
+      "top5": [
+        "qs-c-2143",
+        "qs-c-3149",
+        "qs-c-2215",
+        "qs-c-3077",
+        "qs-c-2117"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2115",
+      "query": "就欺负你呗",
+      "hit": false,
+      "rank": 8,
+      "top5": [
+        "qs-c-2728",
+        "qs-c-2403",
+        "qs-c-3298",
+        "qs-c-3239",
+        "qs-c-2795"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2529",
+      "query": "刚第一次见面就让你请客吃饭，这有点不合适吧？",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-2529",
+        "qs-e-26",
+        "qs-c-3183",
+        "qs-c-3306",
+        "qs-c-2458"
+      ]
+    },
+    {
+      "expected_id": "qs-c-3173",
+      "query": "这不太对吧，大家不都这么干的吗",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-3173",
+        "qs-c-2811",
+        "qs-c-2325",
+        "qs-c-3388",
+        "qs-c-3009"
+      ]
+    },
+    {
+      "expected_id": "qs-c-3314",
+      "query": "我才大一，是艺术系的",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-3314",
+        "qs-c-2099",
+        "qs-c-2384",
+        "qs-c-2120",
+        "qs-c-2815"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2384",
+      "query": "你上大几了呀？",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-2384",
+        "qs-c-2365",
+        "qs-c-3027",
+        "qs-c-2027",
+        "qs-c-3239"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2023",
+      "query": "你干的是什么工作啊？",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-2023",
+        "qs-c-3071",
+        "qs-c-2983",
+        "qs-c-2477",
+        "qs-c-3096"
+      ]
+    },
+    {
+      "expected_id": "qs-c-3057",
+      "query": "咱们下回啥时候碰面啊？",
+      "hit": true,
+      "rank": 3,
+      "top5": [
+        "qs-c-2870",
+        "qs-c-2484",
+        "qs-c-3057",
+        "qs-e-3",
+        "qs-c-2433"
+      ]
+    },
+    {
+      "expected_id": "qs-c-3218",
+      "query": "今天想出门，你觉得去哪儿比较合适？",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-3218",
+        "qs-c-2006",
+        "qs-c-2150",
+        "qs-c-2323",
+        "qs-c-3231"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2850",
+      "query": "这真是相当不错，简直就是极品了",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-2850",
+        "qs-c-2397",
+        "qs-c-3332",
+        "qs-c-2076",
+        "qs-c-2797"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2442",
+      "query": "今天真是累坏了，刚冲完凉打算睡觉了",
+      "hit": true,
+      "rank": 4,
+      "top5": [
+        "qs-c-3220",
+        "qs-c-2300",
+        "qs-c-2089",
+        "qs-c-2442",
+        "qs-c-2565"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2849",
+      "query": "那你是哪里人啊？",
+      "hit": true,
+      "rank": 2,
+      "top5": [
+        "qs-c-2511",
+        "qs-c-2849",
+        "qs-c-3071",
+        "qs-c-3096",
+        "qs-c-3095"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2378",
+      "query": "我手机没带在身上呢。（微笑）",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-2378",
+        "qs-c-3326",
+        "qs-c-2424",
+        "qs-c-3065",
+        "qs-c-2524"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2963",
+      "query": "我觉得你想岔了",
+      "hit": false,
+      "rank": 12,
+      "top5": [
+        "qs-c-2794",
+        "qs-c-2034",
+        "qs-c-3220",
+        "qs-c-3133",
+        "qs-c-2174"
+      ]
+    },
+    {
+      "expected_id": "qs-c-3344",
+      "query": "你短信这块儿事儿挺多啊……",
+      "hit": true,
+      "rank": 4,
+      "top5": [
+        "qs-c-2427",
+        "qs-c-2434",
+        "qs-c-2602",
+        "qs-c-3344",
+        "qs-c-2186"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2347",
+      "query": "你们俩这么亮眼，太吸引眼球了，这里美女那么多，你俩肯定看不到我们吧！",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-2347",
+        "qs-c-3063",
+        "qs-c-2034",
+        "qs-c-3031",
+        "qs-c-2222"
+      ]
+    },
+    {
+      "expected_id": "qs-c-3253",
+      "query": "今天心情还不错呢",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-3253",
+        "qs-c-3138",
+        "qs-c-3076",
+        "qs-c-2068",
+        "qs-c-2565"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2295",
+      "query": "还行，正跟朋友珍妮一块儿看电视呢。",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-2295",
+        "qs-c-2173",
+        "qs-c-2277",
+        "qs-c-2347",
+        "qs-c-2252"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2409",
+      "query": "说实话，我以前有过一段挺糟的感情经历，所以现在对感情这事儿有点小心。",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-2409",
+        "qs-c-2797",
+        "qs-c-3252",
+        "qs-c-2353",
+        "qs-c-3253"
+      ]
+    },
+    {
+      "expected_id": "qs-c-3205",
+      "query": "在家呢，爸妈去台湾玩了",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-3205",
+        "qs-c-2842",
+        "qs-c-2006",
+        "qs-c-2832",
+        "qs-c-2059"
+      ]
+    },
+    {
+      "expected_id": "qs-c-3377",
+      "query": "你最近工作是不是挺忙的？",
+      "hit": true,
+      "rank": 5,
+      "top5": [
+        "qs-c-2916",
+        "qs-c-2018",
+        "qs-c-2121",
+        "qs-c-2089",
+        "qs-c-3377"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2830",
+      "query": "出来吧，肯定不会让我失望的",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-2830",
+        "qs-c-2814",
+        "qs-c-3383",
+        "qs-e-30",
+        "qs-c-2886"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2668",
+      "query": "我已经有男朋友了。",
+      "hit": true,
+      "rank": 3,
+      "top5": [
+        "qs-c-2379",
+        "qs-c-3327",
+        "qs-c-2668",
+        "qs-c-2998",
+        "qs-c-2984"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2717",
+      "query": "我反正啥都没了，你还留着干啥呢？",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-2717",
+        "qs-c-2109",
+        "qs-c-2842",
+        "qs-c-2602",
+        "qs-c-2564"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2623",
+      "query": "我天天都惦记着你，特别想跟你见一面。",
+      "hit": true,
+      "rank": 2,
+      "top5": [
+        "qs-c-2893",
+        "qs-c-2623",
+        "qs-c-2156",
+        "qs-c-3332",
+        "qs-c-2341"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2674",
+      "query": "等哪天我心情特别好再给你吧！不过这个时间……好像还挺久的！",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-2674",
+        "qs-c-2252",
+        "qs-c-3225",
+        "qs-c-3253",
+        "qs-c-3138"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2962",
+      "query": "这是为啥呢？",
+      "hit": false,
+      "rank": 41,
+      "top5": [
+        "qs-c-2564",
+        "qs-c-2109",
+        "qs-c-2999",
+        "qs-c-2784",
+        "qs-c-2889"
+      ]
+    },
+    {
+      "expected_id": "qs-c-3373",
+      "query": "我特别想弄明白……（继续问魔术是怎么变的）",
+      "hit": true,
+      "rank": 2,
+      "top5": [
+        "qs-c-2517",
+        "qs-c-3373",
+        "qs-c-2215",
+        "qs-c-2518",
+        "qs-c-2232"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2822",
+      "query": "唉，我最近吃得特别多，感觉长胖了",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-2822",
+        "qs-c-3217",
+        "qs-c-2806",
+        "qs-c-2312",
+        "qs-c-2096"
+      ]
+    },
+    {
+      "expected_id": "qs-c-3138",
+      "query": "哎，今天真是累得不行，感觉啥事都不顺心",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-3138",
+        "qs-c-2323",
+        "qs-c-2327",
+        "qs-c-2089",
+        "qs-c-2565"
+      ]
+    },
+    {
+      "expected_id": "qs-c-3071",
+      "query": "你是在哪儿读书的呀？干的是什么工作呢？",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-3071",
+        "qs-c-2023",
+        "qs-c-3095",
+        "qs-c-2983",
+        "qs-c-2849"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2998",
+      "query": "我有男朋友了。",
+      "hit": false,
+      "rank": 6,
+      "top5": [
+        "qs-c-2379",
+        "qs-c-2668",
+        "qs-c-2984",
+        "qs-c-3327",
+        "qs-c-2064"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2970",
+      "query": "有点晕",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-2970",
+        "qs-c-3369",
+        "qs-c-2112",
+        "qs-c-2141",
+        "qs-c-2022"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2883",
+      "query": "你咋老是不露面呢？",
+      "hit": false,
+      "rank": 8,
+      "top5": [
+        "qs-c-3337",
+        "qs-c-2338",
+        "qs-c-2109",
+        "qs-c-2849",
+        "qs-c-2277"
+      ]
+    },
+    {
+      "expected_id": "qs-c-3091",
+      "query": "我身高一米六五。",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-3091",
+        "qs-c-2474",
+        "qs-c-2267",
+        "qs-c-3343",
+        "qs-c-2394"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2870",
+      "query": "最近真是没啥意思啊",
+      "hit": true,
+      "rank": 5,
+      "top5": [
+        "qs-c-2532",
+        "qs-c-2018",
+        "qs-c-2327",
+        "qs-c-2888",
+        "qs-c-2870"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2641",
+      "query": "都这么晚了宿舍关门了该咋整啊？",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-2641",
+        "qs-c-3262",
+        "qs-c-2640",
+        "qs-c-2283",
+        "qs-c-2756"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2407",
+      "query": "不太行吧",
+      "hit": false,
+      "rank": null,
+      "top5": [
+        "qs-c-2065",
+        "qs-c-3019",
+        "qs-c-2278",
+        "qs-c-2141",
+        "qs-c-3281"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2062",
+      "query": "你是不是只会对我一个人好呀？",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-2062",
+        "qs-c-2325",
+        "qs-c-3388",
+        "qs-c-2811",
+        "qs-c-2155"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2506",
+      "query": "我也不清楚，我挺爱看动画片和哈利波特的，大家都说我兴趣跟小孩似的",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-2506",
+        "qs-c-2039",
+        "qs-c-2117",
+        "qs-c-2034",
+        "qs-c-2440"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2076",
+      "query": "这家店的拿铁真的挺好喝，我每个星期都会来",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-2076",
+        "qs-c-2105",
+        "qs-c-2066",
+        "qs-c-2039",
+        "qs-c-2034"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2882",
+      "query": "XXX那个明星有喜了吗？",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-2882",
+        "qs-c-3135",
+        "qs-c-3158",
+        "qs-c-3014",
+        "qs-c-2182"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2476",
+      "query": "嗯",
+      "hit": false,
+      "rank": null,
+      "top5": [
+        "qs-c-2016",
+        "qs-c-2669",
+        "qs-c-2850",
+        "qs-c-2203",
+        "qs-c-2773"
+      ]
+    },
+    {
+      "expected_id": "qs-c-3331",
+      "query": "我就是随口问问，你要是没空的话，我就叫别人跟我一块儿去了。",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-3331",
+        "qs-c-2137",
+        "qs-c-3231",
+        "qs-c-3340",
+        "qs-c-2215"
+      ]
+    },
+    {
+      "expected_id": "qs-c-2316",
+      "query": "这一晚又没睡着",
+      "hit": true,
+      "rank": 1,
+      "top5": [
+        "qs-c-2316",
+        "qs-c-2899",
+        "qs-c-2201",
+        "qs-c-2278",
+        "qs-c-3065"
+      ]
+    }
+  ],
+  "eval_sha256": "eab839f57afa36186fd1e096136bc3dc8e7a725a53ce1695eee19c9f4e2d91e7",
+  "index_manifest_sha256": "0e558cb51c3b3415058d261dc6180fdc543a5535aa45b7fa13865749f725289c",
+  "samples_sha256": "ae3c4234656453ebe8eac871a7d37b303ffea7465db8a7ba2a9e168cea0413f9",
+  "network_attempts": 0,
+  "environment": {
+    "system": "Darwin",
+    "release": "27.0.0",
+    "architecture": "arm64",
+    "chip": "Apple M5 Pro",
+    "python": "3.14.3",
+    "packages": {
+      "fastembed": "0.9.1",
+      "onnxruntime": "1.31.1",
+      "jieba": "0.42.1",
+      "rank-bm25": "0.2.2",
+      "numpy": "2.5.4",
+      "mcp": "1.30.0"
+    }
+  }
+}
