@@ -101,3 +101,11 @@ def test_report_uses_the_new_rework_seed():
         ]
         expected = [r["id"] for r in random.Random(REPORT_SEED).sample(load(name), 30)]
         assert actual == expected
+
+
+def test_round2_review_decisions():
+    kept = {r["id"]: r for r in load("samples.jsonl")}
+    dropped = {r["id"]: r for r in load("samples.dropped.jsonl")}
+    assert kept["qs-c-3386"]["reply"] == "哦是阿，不过他还没到"
+    assert kept["qs-c-3386"]["stripped_annotation"] == "坚持目送"
+    assert dropped["qs-c-3044"]["reason"] == "vulgar"
