@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import json
 import sys
 import tempfile
 from pathlib import Path
@@ -11,6 +12,7 @@ from zhiyin.draft import DraftEngine
 from zhiyin.llm import DeepSeek
 from zhiyin.resources import ROOT
 from zhiyin.sample_client import SampleClient
+from zhiyin.wechat import EXPORT, WeChatStore, import_wechat
 
 
 def temporary_state(value: str) -> Path:
@@ -37,9 +39,15 @@ def main():
             command.add_argument("--goal")
             command.add_argument("--index-dir", type=Path, default=ROOT / "data/index")
             command.add_argument("--model-cache", type=Path, default=ROOT / "data/cache/models")
+    importer = commands.add_parser("import_wechat", aliases=["import-wechat"])
+    importer.add_argument("--source", type=Path, default=EXPORT)
+    importer.add_argument("--state-dir", type=temporary_state)
     args = parser.parse_args()
     store = ContactStore(args.state_dir)
     try:
+        if args.command in {"import_wechat", "import-wechat"}:
+            print(json.dumps(import_wechat(WeChatStore(args.state_dir), args.source)))
+            return
         if args.command == "promote":
             store.promote(args.platform, args.contact)
             print("已升级为独立联系人档案")
