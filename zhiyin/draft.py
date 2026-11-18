@@ -5,10 +5,10 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from chat_twin.contacts import ContactStore, validate_identity
-from chat_twin.draft_models import Analysis, Candidate, Decision, Review
-from chat_twin.resources import resource
-from chat_twin.safety import (
+from zhiyin.contacts import ContactStore, validate_identity
+from zhiyin.draft_models import Analysis, Candidate, Decision, Review
+from zhiyin.resources import resource
+from zhiyin.safety import (
     draft_errors,
     handoff_reason,
     parse_chat,

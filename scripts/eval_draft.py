@@ -9,12 +9,12 @@ from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 
-from chat_twin.contacts import ContactStore
-from chat_twin.draft import DraftEngine
-from chat_twin.llm import MODEL, DeepSeek
-from chat_twin.resources import ROOT
-from chat_twin.safety import draft_errors
-from chat_twin.sample_client import SampleClient
+from zhiyin.contacts import ContactStore
+from zhiyin.draft import DraftEngine
+from zhiyin.llm import MODEL, DeepSeek
+from zhiyin.resources import ROOT
+from zhiyin.safety import draft_errors
+from zhiyin.sample_client import SampleClient
 
 FIXTURES = ROOT / "tests/fixtures/draft.jsonl"
 
@@ -27,14 +27,14 @@ async def evaluate() -> dict:
     results = []
     model = DeepSeek()
     async with SampleClient() as samples:
-        with tempfile.TemporaryDirectory(prefix="chat-twin-eval-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="zhiyin-eval-") as temporary:
             store = ContactStore(Path(temporary) / "state")
             engine = DraftEngine(model, samples, store)
             for case in cases:
                 contact = "合成-" + case["id"]
                 if case.get("context"):
-                    store.update("soul", contact, case["context"], "friend")
-                result = await engine.run("soul", contact, case["chat"])
+                    store.update("wechat", contact, case["context"], "friend")
+                result = await engine.run("wechat", contact, case["chat"])
                 # Independently check output constraints using the exact retrieved references.
                 refs = [
                     row

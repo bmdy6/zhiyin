@@ -8,7 +8,7 @@ from pathlib import Path
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from chat_twin.resources import ROOT
+from zhiyin.resources import ROOT
 
 
 class SampleClient:
@@ -29,7 +29,7 @@ class SampleClient:
             command=sys.executable,
             args=[
                 "-m",
-                "chat_twin.server",
+                "zhiyin.server",
                 "--index-dir",
                 str(self.index_dir.resolve()),
                 "--model-cache",

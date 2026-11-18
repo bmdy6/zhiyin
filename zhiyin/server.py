@@ -1,18 +1,19 @@
 """Retrieval-only FastMCP stdio server. Initialization loads the local model once."""
 
 import argparse
+import sys
 from pathlib import Path
 from typing import Annotated
 
 from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 
-from chat_twin.retrieval import ROOT, Retriever
+from zhiyin.retrieval import ROOT, Retriever
 
 
 def create_server(retriever: Retriever) -> FastMCP:
     server = FastMCP(
-        "chat-twin",
+        "zhiyin",
         instructions="公开样本检索参考；本轮不生成草稿、不发送消息。",
         log_level="WARNING",
     )
@@ -41,6 +42,11 @@ def main():
     parser.add_argument("--model-cache", type=Path, default=ROOT / "data/cache/models")
     args = parser.parse_args()
     create_server(Retriever(args.index_dir, model_cache=args.model_cache)).run(transport="stdio")
+
+
+def legacy_main():
+    print("chat-twin-mcp 已更名为 zhiyin-mcp", file=sys.stderr)
+    main()
 
 
 if __name__ == "__main__":

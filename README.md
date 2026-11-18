@@ -1,15 +1,15 @@
-# chat-twin
+# zhiyin
 
-聊天分身：用自己的口吻聊天。已完成 [Issue #1](https://github.com/bmdy6/chat-twin/issues/1) 第1轮公开样本清洗、第2轮本地检索 MCP；本分支实现第3轮命令行草稿引擎。只出草稿，始终由本人决定是否发送。
+知音：用自己的口吻聊天。已完成 [Issue #1](https://github.com/bmdy6/zhiyin/issues/1) 第1轮公开样本清洗、第2轮本地检索 MCP；也已实现第3轮命令行草稿引擎。只出草稿，始终由本人决定是否发送。
 
 ## 第3轮草稿：命令与边界
 
 ```bash
 uv sync --locked
 # 输入是UTF-8，每行 我: / 她: / 他:，最后一条必须来自对方
-uv run --locked chat-twin draft --platform soul --contact 小鱼 --input /path/to/chat.txt
-uv run --locked chat-twin draft --platform soul --contact 小鱼 --input /path/to/chat.txt --goal "自然接话"
-uv run --locked chat-twin promote --platform soul --contact 小鱼
+uv run --locked zhiyin draft --contact 示例联系人 --input /path/to/chat.txt
+uv run --locked zhiyin draft --contact 示例联系人 --input /path/to/chat.txt --goal "自然接话"
+uv run --locked zhiyin promote --contact 示例联系人
 ```
 
 首次仍须按第2轮说明准备本地向量模型。草稿要调用 DeepSeek API；`uv run --offline` 只控制 uv 的依赖解析，不代表草稿模型离线。模型固定 `deepseek-flash`、`thinking.type=disabled`（[官方参数说明](https://api-docs.deepseek.com/guides/thinking_mode/)），只读个人 vault 的 `model-providers.deepseek.DEEPSEEK_API_KEY.value`；不支持环境变量覆盖或回退到其他模型/key。输入最多10000字符、100条消息；goal最多500字符。
@@ -22,7 +22,7 @@ uv run --locked chat-twin promote --platform soul --contact 小鱼
 
 文风仅在运行时读 `~/.style-polish/spoken.md`，缺失时用公开 `profiles/example.md` 并在输出提示；存在但不可读、空或异常大则交回。档案内容仅作为写作/自检的模型输入，不在本地缓存、请求日志、联系人记录、评测报告或仓库保存。输入对话、联系人上下文、goal会送到 DeepSeek；原始聊天文件由本人提供和保管。公开样本只借接话方向，口吻按档案；固定上游原则及MIT许可见 `vendor/tong-jincheng/ATTRIBUTION.md`，不启用原Skill的角色扮演或照搬套路。
 
-联系人默认只写 `~/.chat-twin/`：
+联系人默认只写 `~/.zhiyin/`：
 
 - `总文档.md` 每人一行：平台、昵称、认识方式、输入摘要、阶段、最后日期。没有证据的认识方式标“未记录”。
 - `state.json` 保存日期集合等内部状态；同一天重复运行只计一天，第三个不同本机日期自动建 `contacts/<平台>/<昵称>.md`，也可手动 `promote`。手动升级不伪造聊天日期。
@@ -35,9 +35,9 @@ uv run --locked chat-twin promote --platform soul --contact 小鱼
 ```bash
 # 离线单测，不调用聊天模型；包括真实MCP生命周期回归
 uv run --locked --offline pytest -q
-uv run --locked --offline ruff check chat_twin scripts tests
-uv run --locked --offline ruff format --check chat_twin scripts tests
-uv run --locked --offline python -m compileall -q chat_twin scripts
+uv run --locked --offline ruff check zhiyin scripts tests
+uv run --locked --offline ruff format --check zhiyin scripts tests
+uv run --locked --offline python -m compileall -q zhiyin scripts
 uv build
 # 会调用付费DeepSeek，用本机文风；联系人临时目录自动清理
 # 已有报告拒绝覆盖，复跑请指定新文件
@@ -58,7 +58,7 @@ uv sync --locked
 uv run python -m scripts.build_index
 # 缓存就绪后可以离线重建；不调用 LLM
 uv run --offline python -m scripts.build_index --offline
-uv run --offline --no-sync chat-twin-mcp
+uv run --offline --no-sync zhiyin-mcp
 ```
 
 `data/index/` 已提交离线索引（788条），无需每次重建。模型二进制在忽略的 `data/cache/models/`，不进 Git。服务启动强制 `local_files_only=True`、CPUExecutionProvider、2线程，加载一次后复用；缓存缺失、索引过期或损坏会明确报错，查询路径不会自动下载或调用远程 API。`--index-dir` 的父目录必须包含匹配的 `samples.jsonl`。wheel 安装时使用下面的绝对资源路径。
@@ -75,21 +75,21 @@ uv run --offline --no-sync chat-twin-mcp
 在仓库根目录、完成 `uv sync` 和模型准备后，执行以下命令注册本地 stdio 服务：
 
 ```bash
-claude mcp add --transport stdio chat-twin -- \
-  "$PWD/.venv/bin/chat-twin-mcp" \
+claude mcp add --transport stdio zhiyin -- \
+  "$PWD/.venv/bin/zhiyin-mcp" \
   --index-dir "$PWD/data/index" --model-cache "$PWD/data/cache/models"
 ```
 
-可用 `claude mcp get chat-twin` 查看配置；在 Claude Code 中调用 `list_stages` 或搜索“今天工作累不累”。[Claude Code 官方配置说明](https://code.claude.com/docs/en/mcp#option-3-add-a-local-stdio-server)。
+可用 `claude mcp get zhiyin` 查看配置；在 Claude Code 中调用 `list_stages` 或搜索“今天工作累不累”。[Claude Code 官方配置说明](https://code.claude.com/docs/en/mcp#option-3-add-a-local-stdio-server)。
 
 ### Codex 配置
 
 在 `~/.codex/config.toml` 增加以下配置，把路径替换成当前仓库的绝对路径（不能用未展开的 `~`）：
 
 ```toml
-[mcp_servers.chat-twin]
-command = "/absolute/path/chat-twin/.venv/bin/chat-twin-mcp"
-args = ["--index-dir", "/absolute/path/chat-twin/data/index", "--model-cache", "/absolute/path/chat-twin/data/cache/models"]
+[mcp_servers.zhiyin]
+command = "/absolute/path/zhiyin/.venv/bin/zhiyin-mcp"
+args = ["--index-dir", "/absolute/path/zhiyin/data/index", "--model-cache", "/absolute/path/zhiyin/data/cache/models"]
 startup_timeout_sec = 30
 tool_timeout_sec = 10
 ```
@@ -104,9 +104,9 @@ tool_timeout_sec = 10
 uv run --offline python -m scripts.eval_retrieval
 uv run --offline python -m scripts.smoke_mcp
 uv run --offline pytest -q
-uv run --offline ruff check chat_twin scripts tests
-uv run --offline ruff format --check chat_twin scripts tests
-uv run --offline python -m compileall -q chat_twin scripts
+uv run --offline ruff check zhiyin scripts tests
+uv run --offline ruff format --check zhiyin scripts tests
+uv run --offline python -m compileall -q zhiyin scripts
 uv build
 ```
 

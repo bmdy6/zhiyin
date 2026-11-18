@@ -11,14 +11,14 @@ import numpy as np
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from chat_twin.retrieval import ROOT, sha256
+from zhiyin.retrieval import ROOT, sha256
 
 
 async def run() -> dict:
     queries = [json.loads(s) for s in (ROOT / "evals/retrieval.jsonl").read_text().splitlines()]
     # Explicit absolute resource paths also exercise the wheel-install use case.
     params = StdioServerParameters(
-        command=str(Path(sys.executable).parent / "chat-twin-mcp"),
+        command=str(Path(sys.executable).parent / "zhiyin-mcp"),
         args=[
             "--index-dir",
             str(ROOT / "data/index"),
@@ -65,7 +65,7 @@ async def run() -> dict:
         assert unknown.isError
     return {
         "transport": "stdio",
-        "entrypoint": "chat-twin-mcp",
+        "entrypoint": "zhiyin-mcp",
         "tools": sorted(t.name for t in tools),
         "queries": len(times),
         "hits_at_5": hits,

@@ -4,11 +4,11 @@ import json
 import httpx
 import pytest
 
-from chat_twin.llm import DeepSeek
+from zhiyin.llm import DeepSeek
 
 
 def test_disabled_thinking_no_prompt_persistence(monkeypatch):
-    monkeypatch.setattr("chat_twin.llm.read_key", lambda: "synthetic-key")
+    monkeypatch.setattr("zhiyin.llm.read_key", lambda: "synthetic-key")
     calls = []
 
     def respond(request):
@@ -41,7 +41,7 @@ def test_disabled_thinking_no_prompt_persistence(monkeypatch):
     ],
 )
 def test_invalid_provider_output_rejected(monkeypatch, message, finish):
-    monkeypatch.setattr("chat_twin.llm.read_key", lambda: "synthetic-key")
+    monkeypatch.setattr("zhiyin.llm.read_key", lambda: "synthetic-key")
     model = DeepSeek(
         transport=httpx.MockTransport(
             lambda request: httpx.Response(

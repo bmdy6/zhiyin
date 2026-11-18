@@ -2,8 +2,8 @@ import asyncio
 import copy
 import json
 
-from chat_twin.contacts import ContactStore
-from chat_twin.draft import DraftEngine
+from zhiyin.contacts import ContactStore
+from zhiyin.draft import DraftEngine
 
 ANALYSIS = {
     "summary": "对方分享了猫抢椅子的趣事",
@@ -52,7 +52,7 @@ def engine(tmp_path, responses):
 
 def run(instance, **kwargs):
     return asyncio.run(
-        instance.run("soul", "合成猫友", "我: 猫睡了吗\n她: 它把我的椅子抢了", **kwargs)
+        instance.run("wechat", "合成猫友", "我: 猫睡了吗\n她: 它把我的椅子抢了", **kwargs)
     )
 
 
@@ -71,7 +71,7 @@ def test_friend_draft_and_private_style_only_sent_to_writing(tmp_path):
 
 def test_risk_no_model_or_search(tmp_path):
     instance, model, search = engine(tmp_path, [])
-    result = asyncio.run(instance.run("soul", "合成", "她: 你是机器人吗"))
+    result = asyncio.run(instance.run("wechat", "合成", "她: 你是机器人吗"))
     assert result.handoff and not result.messages
     assert not model.calls and not search.calls
 

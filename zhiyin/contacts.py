@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import fcntl
 import json
-import os
 import re
-import tempfile
-from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
 
-from chat_twin.resources import resource
+from zhiyin.local import PrivateFiles
+from zhiyin.resources import resource
 
 
 def validate_identity(platform: str, contact: str) -> None:
@@ -30,33 +27,7 @@ def cell(text: str) -> str:
     return " ".join(text.replace("|", "／").split())[:1000]
 
 
-class ContactStore:
-    def __init__(self, root: Path | None = None):
-        self.root = (root if root is not None else Path.home() / ".chat-twin").absolute()
-
-    def _path(self, relative: str) -> Path:
-        path = self.root / relative
-        # Reject symlinks in the entire ancestry, including the state root.
-        for item in (path, *path.parents):
-            if item.is_symlink() and not (
-                str(item) in {"/var", "/tmp"} and str(item.resolve()) == "/private" + str(item)
-            ):
-                raise ValueError("联系人存储不能经过符号链接")
-        return path
-
-    @contextmanager
-    def _locked(self):
-        lock = self._path(".lock")
-        self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
-        self.root.chmod(0o700)
-        with lock.open("a") as handle:
-            lock.chmod(0o600)
-            fcntl.flock(handle, fcntl.LOCK_EX)
-            try:
-                yield
-            finally:
-                fcntl.flock(handle, fcntl.LOCK_UN)
-
+class ContactStore(PrivateFiles):
     def _load(self) -> list[dict]:
         path = self._path("state.json")
         if not path.exists():
@@ -65,24 +36,6 @@ class ContactStore:
         if not isinstance(rows, list):
             raise TypeError("联系人状态损坏")
         return rows
-
-    def _write(self, relative: str, text: str):
-        path = self._path(relative)
-        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        parent = path.parent
-        while parent != self.root:
-            parent.chmod(0o700)
-            parent = parent.parent
-        fd, temporary = tempfile.mkstemp(dir=path.parent, prefix=".contact-")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                handle.write(text)
-                handle.flush()
-                os.fsync(handle.fileno())
-            os.replace(temporary, path)
-        finally:
-            if os.path.exists(temporary):
-                os.unlink(temporary)
 
     @staticmethod
     def _get(rows: list[dict], platform: str, contact: str) -> dict:
@@ -103,6 +56,13 @@ class ContactStore:
 
     def context(self, platform: str, contact: str) -> str:
         validate_identity(platform, contact)
+        if (
+            self.legacy is not None
+            and self.legacy.exists()
+            and not self._path(".migrated").exists()
+        ):
+            with self._locked():
+                pass
         profile = self._path(f"contacts/{platform}/{contact}.md")
         if profile.exists():
             return profile.read_text(encoding="utf-8")[:16000]

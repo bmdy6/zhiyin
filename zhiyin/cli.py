@@ -6,11 +6,11 @@ import sys
 import tempfile
 from pathlib import Path
 
-from chat_twin.contacts import ContactStore
-from chat_twin.draft import DraftEngine
-from chat_twin.llm import DeepSeek
-from chat_twin.resources import ROOT
-from chat_twin.sample_client import SampleClient
+from zhiyin.contacts import ContactStore
+from zhiyin.draft import DraftEngine
+from zhiyin.llm import DeepSeek
+from zhiyin.resources import ROOT
+from zhiyin.sample_client import SampleClient
 
 
 def temporary_state(value: str) -> Path:
@@ -27,10 +27,10 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     for name in ("draft", "promote"):
         command = commands.add_parser(name)
-        command.add_argument("--platform", required=True)
+        command.add_argument("--platform", choices=["wechat"], default="wechat")
         command.add_argument("--contact", required=True)
         command.add_argument(
-            "--state-dir", type=temporary_state, help="仅测试用的临时目录；默认 ~/.chat-twin/"
+            "--state-dir", type=temporary_state, help="仅测试用的临时目录；默认 ~/.zhiyin/"
         )
         if name == "draft":
             command.add_argument("--input", required=True, type=Path)
@@ -61,6 +61,11 @@ def main():
     except Exception:  # noqa: BLE001 -- redact private provider/input errors at boundary
         print("草稿流程失败，未自动发送任何消息", file=sys.stderr)
         raise SystemExit(1) from None
+
+
+def legacy_main():
+    print("chat-twin 已更名为 zhiyin", file=sys.stderr)
+    main()
 
 
 if __name__ == "__main__":
