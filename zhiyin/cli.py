@@ -7,6 +7,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from zhiyin.brief import contact_brief
 from zhiyin.contacts import ContactStore
 from zhiyin.draft import DraftEngine
 from zhiyin.llm import DeepSeek
@@ -45,6 +46,9 @@ def main():
     importer.add_argument("--state-dir", type=temporary_state)
     tone = commands.add_parser("tone_profile", aliases=["tone-profile"])
     tone.add_argument("--state-dir", type=temporary_state)
+    brief = commands.add_parser("contact_brief", aliases=["contact-brief"])
+    brief.add_argument("contact")
+    brief.add_argument("--state-dir", type=temporary_state)
     args = parser.parse_args()
     store = ContactStore(args.state_dir)
     try:
@@ -53,6 +57,13 @@ def main():
             return
         if args.command in {"tone_profile", "tone-profile"}:
             print(json.dumps(tone_profile(WeChatStore(args.state_dir))))
+            return
+        if args.command in {"contact_brief", "contact-brief"}:
+            print(
+                json.dumps(
+                    contact_brief(WeChatStore(args.state_dir), args.contact), ensure_ascii=False
+                )
+            )
             return
         if args.command == "promote":
             store.promote(args.platform, args.contact)

@@ -6,15 +6,28 @@ from pathlib import Path
 from typing import Annotated
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp.exceptions import ToolError
 from pydantic import Field
 
+from zhiyin.brief import contact_brief as build_contact_brief
 from zhiyin.retrieval import ROOT, Retriever
+from zhiyin.wechat import WeChatStore
 
 
-def create_server(retriever: Retriever) -> FastMCP:
-    server = FastMCP(
+class ZhiyinMCP(FastMCP):
+    async def call_tool(self, name, arguments):
+        try:
+            return await super().call_tool(name, arguments)
+        except ToolError:
+            # Parameter validation and downstream errors may include conversation text.
+            raise ToolError("知音工具调用失败，请检查参数和本地配置") from None
+
+
+def create_server(retriever: Retriever, store: WeChatStore | None = None) -> FastMCP:
+    store = store if store is not None else WeChatStore()
+    server = ZhiyinMCP(
         "zhiyin",
-        instructions="公开样本检索参考；本轮不生成草稿、不发送消息。",
+        instructions="知音提供本地微信聊天参考和公开辅助样本。",
         log_level="WARNING",
     )
 
@@ -33,6 +46,11 @@ def create_server(retriever: Retriever) -> FastMCP:
         """返回各数字阶段的总条数及每个上游原名的条数（名称不合并）。"""
         return retriever.list_stages()
 
+    @server.tool(annotations={"readOnlyHint": True, "openWorldHint": False})
+    def contact_brief(contact: Annotated[str, Field(min_length=1, max_length=200)]) -> dict:
+        """按微信昵称、备注、会话代号或会话 ID 查看聊天近况和待确认约定。"""
+        return build_contact_brief(store, contact)
+
     return server
 
 
@@ -40,8 +58,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--index-dir", type=Path, default=ROOT / "data/index")
     parser.add_argument("--model-cache", type=Path, default=ROOT / "data/cache/models")
+    from zhiyin.cli import temporary_state
+
+    parser.add_argument("--state-dir", type=temporary_state)
     args = parser.parse_args()
-    create_server(Retriever(args.index_dir, model_cache=args.model_cache)).run(transport="stdio")
+    create_server(
+        Retriever(args.index_dir, model_cache=args.model_cache), WeChatStore(args.state_dir)
+    ).run(transport="stdio")
 
 
 def legacy_main():

@@ -115,3 +115,33 @@ def test_tone_uses_all_own_bubbles_and_respects_groups_and_exclusions(tmp_path):
     assert path.stat().st_mode & 0o777 == 0o600
     assert tone_profile(store) == stats
     assert path.read_bytes() == first
+
+
+def test_brief_has_recent_context_and_open_arrangements(tmp_path):
+    from zhiyin.brief import contact_brief
+
+    root = tmp_path / "export"
+    store = WeChatStore(tmp_path / "state")
+    export(
+        root,
+        {
+            "合成甲": [
+                msg(0, "them", "周末一起吃饭吗"),
+                msg(1, "me", "好呀"),
+                msg(2, "them", "不吃了，改天再说"),
+                msg(3, "me", "下次一起看展？"),
+                msg(4, "them", "好"),
+                msg(5, "them", "[贴图]", 47),
+            ],
+        },
+    )
+    import_wechat(store, root)
+    result = contact_brief(store, "C1")
+    assert result["contact"] == "合成甲"
+    assert result["duration_days"] == 0
+    assert result["message_count"] == 6
+    assert result["recent"][-1]["text"] is None
+    assert [item["topic"] for item in result["open_arrangements"]] == ["出门"]
+    assert result["open_arrangements"][0]["status"] == "已回应，未见落实"
+    (store.root / "config.toml").write_text('exclude_contacts = ["C1"]\n')
+    assert contact_brief(store, "合成甲") == {"found": False}
