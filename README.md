@@ -1,78 +1,41 @@
-# zhiyin
+# 知音（zhiyin）
 
-知音：用自己的口吻聊天。已完成 [Issue #1](https://github.com/bmdy6/zhiyin/issues/1) 第1轮公开样本清洗、第2轮本地检索 MCP；也已实现第3轮命令行草稿引擎。只出草稿，始终由本人决定是否发送。
+知音从你的微信聊天记录找过去遇到过的情境，结合沟通习惯给出回复草稿。每条草稿附来源和自检理由，由你自己决定是否复制发送。[需求与验收](https://github.com/bmdy6/zhiyin/issues/6)
 
-## 第3轮草稿：命令与边界
+## 安装与导入
 
-```bash
-uv sync --locked
-# 输入是UTF-8，每行 我: / 她: / 他:，最后一条必须来自对方
-uv run --locked zhiyin draft --contact 示例联系人 --input /path/to/chat.txt
-uv run --locked zhiyin draft --contact 示例联系人 --input /path/to/chat.txt --goal "自然接话"
-uv run --locked zhiyin promote --contact 示例联系人
-```
-
-首次仍须按第2轮说明准备本地向量模型。草稿要调用 DeepSeek API；`uv run --offline` 只控制 uv 的依赖解析，不代表草稿模型离线。模型固定 `deepseek-flash`、`thinking.type=disabled`（[官方参数说明](https://api-docs.deepseek.com/guides/thinking_mode/)），只读个人 vault 的 `model-providers.deepseek.DEEPSEEK_API_KEY.value`；不支持环境变量覆盖或回退到其他模型/key。输入最多10000字符、100条消息；goal最多500字符。
-
-分析 → 决策 → **第2轮真实 stdio MCP** 检索5条 → 写 → 本地规则与模型语义自检。4份提示词分别位于 `prompts/analyze.txt`、`decide.txt`、`write.txt`、`check.txt`。JSON字段严格校验。熟人标记 `friend`，向现有MCP传 `stage=None`，避免硬套追求阶段；数字阶段按±1过滤。
-
-输出为 `[等待 0分钟]`、1–3条 `[发送]` 和一条 `[理由]`。`[发送]` 是可复制的草稿标签，程序没有任何发送能力。每条≤40个Unicode字符，不带括号、Markdown和破折号；逐条去标点、NFKC归一后用 `difflib.SequenceMatcher.ratio()` 比较检索结果，严格>0.85算照抄，也拦截完全相同及拆条照抄。另拦截连续16个归一化字的档案原文回显；语义自检再判断承诺、事实、口吻和套路。首次不通过会把具体问题仅在内存里反馈给写作步骤，只重写一次，仍失败即 `[交给你]`，不展示失败草稿。
-
-涉及身份确认、钱/投资、见面/联络方式、严重负面情绪、承诺/私人信息直接交回；关键词先拦最后一条及goal，模型决策和自检结合完整上下文补足语义。未知项≥3直接交回，少于3项但妨碍安全作答也由模型交回；这不是完整的风险识别保证。goal要求邀约同样交回，例如 Issue 示例中的 `--goal "约周末看展"` 不会绕过见面边界。决策为“先不回”则输出 `[先不回]` 和理由，不强凑草稿。等待默认0分钟，不用于制造稀缺感。
-
-文风仅在运行时读 `~/.style-polish/spoken.md`，缺失时用公开 `profiles/example.md` 并在输出提示；存在但不可读、空或异常大则交回。档案内容仅作为写作/自检的模型输入，不在本地缓存、请求日志、联系人记录、评测报告或仓库保存。输入对话、联系人上下文、goal会送到 DeepSeek；原始聊天文件由本人提供和保管。公开样本只借接话方向，口吻按档案；固定上游原则及MIT许可见 `vendor/tong-jincheng/ATTRIBUTION.md`，不启用原Skill的角色扮演或照搬套路。
-
-联系人默认只写 `~/.zhiyin/`：
-
-- `总文档.md` 每人一行：平台、昵称、认识方式、输入摘要、阶段、最后日期。没有证据的认识方式标“未记录”。
-- `state.json` 保存日期集合等内部状态；同一天重复运行只计一天，第三个不同本机日期自动建 `contacts/<平台>/<昵称>.md`，也可手动 `promote`。手动升级不伪造聊天日期。
-- 有独立档案优先读档案，否则只读总文档该行；独立档案保留简介、说话分寸、长期记忆和未完的事等人工内容，只替换标记内最近摘要。长期记忆由本人补充，不自动推断。
-- 只记输入概况，草稿不算已经发送或达成承诺；敏感直交回不保存原句。目录权限0700、文件0600，本地锁和逐文件原子替换；拒绝路径穿越和存储路径符号链接（只允许macOS标准 `/var`、`/tmp` 系统别名）。`state.json`为内部记录源，不支持手动编辑总表后自动反向导入。
-- `--state-dir` 仅给测试隔离用，只允许系统临时目录下的子目录；正式数据仍用默认位置。所有自动测试与合成评测都显式使用临时目录。
-
-### 第3轮验证
-
-```bash
-# 离线单测，不调用聊天模型；包括真实MCP生命周期回归
-uv run --locked --offline pytest -q
-uv run --locked --offline ruff check zhiyin scripts tests
-uv run --locked --offline ruff format --check zhiyin scripts tests
-uv run --locked --offline python -m compileall -q zhiyin scripts
-uv build
-# 会调用付费DeepSeek，用本机文风；联系人临时目录自动清理
-# 已有报告拒绝覆盖，复跑请指定新文件
-uv run --locked python -m scripts.eval_draft --output /tmp/draft-results-rerun.json
-```
-
-固定合成集 `tests/fixtures/draft.jsonl` 含10段普通闲聊、5段需交回和5段熟人对话。熟人上下文仅在临时联系人记录中预置为friend；每段重新分析/决策，并用真实stdio检索。评测只留生成输出、阶段、样本ID、重写次数、模型/usage等非敏感元数据，不存档案和模型请求。最终结果见 `evals/draft-results.json`，5段完整输出见 PR。合成集通过不等于真实聊天效果或主观口吻已获本人/Claude认可。
-
-安装wheel后，提示词、公开回退档案、联系人模板和vendor许可随包分发；检索索引及模型缓存仍通过 `--index-dir` / `--model-cache` 指定绝对路径，不打包私有运行时数据。
-
-## 第2轮检索：安装与启动
-
-第2轮MCP只检索公开样本，不生成草稿、不发送消息，也不存查询。需要 Python 3.11+ 与 uv。在仓库根目录执行：
+需要 Python 3.11+ 和 uv。在仓库根目录执行：
 
 ```bash
 uv sync --locked
-# 首次可联网准备本地模型；已有缓存则直接复用
-uv run python -m scripts.build_index
-# 缓存就绪后可以离线重建；不调用 LLM
-uv run --offline python -m scripts.build_index --offline
-uv run --offline --no-sync zhiyin-mcp
+# 首次准备本地向量模型。已有缓存可以跳过。
+uv run --locked python -m scripts.build_index
+uv run --locked --offline zhiyin import_wechat --prepare-search
+uv run --locked --offline zhiyin tone_profile
 ```
 
-`data/index/` 已提交离线索引（788条），无需每次重建。模型二进制在忽略的 `data/cache/models/`，不进 Git。服务启动强制 `local_files_only=True`、CPUExecutionProvider、2线程，加载一次后复用；缓存缺失、索引过期或损坏会明确报错，查询路径不会自动下载或调用远程 API。`--index-dir` 的父目录必须包含匹配的 `samples.jsonl`。wheel 安装时使用下面的绝对资源路径。
+- `import_wechat` 默认从 `~/Documents/knowledge-mcp/private/微信聊天/` 读取 `导出清单.json` 和清单指定的各会话 `chat.jsonl`。可以用 `--source` 指定同一格式的其他导出。导入按会话 ID、时间、方向、类型、内容和同秒重复次数识别消息。导出没有数据库消息 ID，同一份或扩充后的快照可重复导入。同一秒内两份独立截取的完全相同内容无法区分。
+- 回复对关联六小时内上一条对方消息。区分同秒顺序。可读文本包括普通文本和引用回复的本次正文。`--prepare-search` 额外在本机预计算向量；省略时由首次检索计算。两种方式均沿用本地 BGE 编码器。
+- `tone_profile` 生成 `~/.zhiyin/口吻.md`，统计发出的有效消息、文本长度、单条与连发、标点、语气词、表情和常用词，并按关系保留短句例子。终端只显示统计。口吻文件可在导入新数据或修改关系分组后重建。
+- 存储目录 `~/.zhiyin/` 的权限为 0700，生成文件为 0600。首次使用时从存在的 `~/.chat-twin/` 复制旧文件，保留原目录，已有目标文件优先。旧命令 `chat-twin` 和 `chat-twin-mcp` 仍可调用，会在 stderr 提示更名。
 
-### MCP 工具
+### 排除与关系组
 
-- `search_samples(message, stage=None, scene=None, k=5)`：返回 `id / stage / context / her / reply / goal / score`。`stage` 为1–7，检索当前阶段及相邻阶段（±1）；`scene` 为 online/offline/unknown，精确过滤。省略过滤条件则检索全部。`k` 为1–50，最多返回两路候选并集；空白或纯标点输入、无符合条件的样本返回空列表。消息最多10000字符。
-- `list_stages()`：返回每个数字阶段的总数，以及各上游原名和对应条数；两个阶段5名称各自保留。
+在 `~/.zhiyin/config.toml` 修改配置，下面的键都是合成示例。会话 ID 和代号可避免同名联系人混淆。
 
-只用 `her + 换行 + context` 建词项和向量索引，reply/goal仅随结果返回。jieba 默认精确分词 + BM25Okapi，与本地 `BAAI/bge-small-zh-v1.5` 余弦相似度各取前30；stage/scene在两路截断前过滤。BM25无正匹配分的项不注入词法候选。RRF等权合并，常数60，按 `sum(1/(60+rank))` 计分；分数是排序分数，不是概率。同分按原样本顺序稳定排序。
+```toml
+exclude_contacts = ["示例会话-A"]
 
-### Claude Code 配置
+[relationships]
+"示例会话-B" = "朋友"
+"示例会话-C" = "同事"
+```
 
-在仓库根目录、完成 `uv sync` 和模型准备后，执行以下命令注册本地 stdio 服务：
+支持 `家人`、`朋友`、`同事`、`陌生人或办事`、`未分类`。导出没有关系信息且本地没有配置时，归为未分类。工具查询即时应用排除名单，再次导入时从消息和向量索引清理被排除的会话。草稿使用与当前可见消息和关系分组匹配的口吻统计。
+
+## 查看近况、检索、起草
+
+在 Claude Code 注册本地 MCP：
 
 ```bash
 claude mcp add --transport stdio zhiyin -- \
@@ -80,21 +43,41 @@ claude mcp add --transport stdio zhiyin -- \
   --index-dir "$PWD/data/index" --model-cache "$PWD/data/cache/models"
 ```
 
-可用 `claude mcp get zhiyin` 查看配置；在 Claude Code 中调用 `list_stages` 或搜索“今天工作累不累”。[Claude Code 官方配置说明](https://code.claude.com/docs/en/mcp#option-3-add-a-local-stdio-server)。
-
-### Codex 配置
-
-在 `~/.codex/config.toml` 增加以下配置，把路径替换成当前仓库的绝对路径（不能用未展开的 `~`）：
+在 Codex 的 `~/.codex/config.toml` 填入相同的绝对路径：
 
 ```toml
 [mcp_servers.zhiyin]
 command = "/absolute/path/zhiyin/.venv/bin/zhiyin-mcp"
 args = ["--index-dir", "/absolute/path/zhiyin/data/index", "--model-cache", "/absolute/path/zhiyin/data/cache/models"]
 startup_timeout_sec = 30
-tool_timeout_sec = 10
+tool_timeout_sec = 240
 ```
 
-配置语法依据 [OpenAI 官方 MCP 文档](https://developers.openai.com/codex/mcp)。这里仅提供配置方式，本轮未修改任何客户端全局配置，也未打开客户端界面。
+- `contact_brief(contact)` 接受已导入会话的备注、昵称、代号或 ID，返回首末时间、跨度、最近几条消息和根据近期对话识别的待确认约定。约定按文本线索估计，实际履行情况由本人确认。
+- `search_my_replies(message, contact=None, k=5)` 检索「对方说过什么 → 我当时怎么回」，附日期。相似结果按同一联系人、同类已知关系、其他联系人排序。用第 2 轮的 jieba + BM25、BGE 向量和 RRF，词法匹配和向量门槛允许返回空结果。
+- `draft_reply(contact, message, goal=None)` 对已导入的联系人起草 1–3 条可独立使用的回复，每条附参考编号和对应的复盘规则。找不到相似个人回复时才使用公开样本。身份、钱、见面、严重负面情绪和需要本人承诺的消息交回本人。六条规则经过语义自检，首次失败可重写一次。
+- 公开辅助工具 `search_samples` 和 `list_stages` 沿用第 2 轮的行为。公开索引默认读取仓库的 `data/index/`，wheel 安装时请用 `--index-dir`、`--model-cache` 指定对应绝对路径。
+
+CLI 也提供这些入口。带原文的结果只在你主动调用时返回；用输入文件可以在命令行提供对话上下文。
+
+```bash
+uv run --locked zhiyin contact_brief "示例联系人"
+uv run --locked zhiyin search_my_replies "合成消息" --contact "示例联系人"
+uv run --locked zhiyin draft_reply --contact "示例联系人" --input /path/to/chat.txt
+```
+
+`--input` 为 UTF-8，每行 `我:` / `她:` / `他:`，最后一条来自对方。也可用 `--message` 传单条新消息。导入、口吻统计和检索在本机运行。草稿会将待回复消息、必要的近况、选中的参考、口吻统计和 `~/.style-polish/spoken.md` 作为模型输入。口吻档案的真实例句留在本地。DeepSeek 沿用 vault 的个人密钥、`deepseek-flash` 和关闭思考的配置。项目日志不记录聊天、档案或请求正文。
+
+## 本地检查
+
+```bash
+uv run --locked --offline pytest -q
+uv run --locked --offline ruff check zhiyin scripts tests
+uv run --locked --offline ruff format --check zhiyin scripts tests
+uv build
+```
+
+微信功能的测试使用合成导出和模拟聊天模型。真实向量检索和 stdio 测试复用本地模型缓存。
 
 ## 固定评测与验证
 

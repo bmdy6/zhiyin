@@ -38,8 +38,14 @@ def parse_chat(text: str) -> list[dict]:
     return messages
 
 
-def handoff_reason(text: str) -> str | None:
+def handoff_reason(text: str, *, wechat: bool = False) -> str | None:
     for reason, pattern in RISK_PATTERNS:
+        if wechat and reason == "涉及见面或联系方式":
+            pattern = pattern.replace("|微信|", "|加.{0,4}微信|")
+            pattern += r"|约饭|请你(?:吃|喝)|下次.{0,4}一起.{0,4}(?:吃|喝|聚)|抽空聚聚"
+        if wechat and reason == "对方情绪很差，需要本人处理":
+            pattern = pattern.replace("|难过|伤心|", "|(?:太|特别|非常|好|很)(?:难过|伤心|生气)|")
+            pattern = pattern.replace("|气死|生气|", "|气死|")
         if re.search(pattern, text, re.IGNORECASE):
             return reason
     return None
@@ -49,7 +55,7 @@ def normalized_text(text: str) -> str:
     return "".join(c.lower() for c in unicodedata.normalize("NFKC", text) if c.isalnum())
 
 
-def draft_errors(messages: list[str], samples: list[dict]) -> list[str]:
+def draft_errors(messages: list[str], samples: list[dict], *, wechat: bool = False) -> list[str]:
     errors = []
     if not 1 <= len(messages) <= 3:
         errors.append("必须为1–3条消息")
@@ -58,7 +64,7 @@ def draft_errors(messages: list[str], samples: list[dict]) -> list[str]:
             errors.append("每条须为1–40字")
         if re.search(r"[\r\n()（）\[\]【】{}<>*_`#~|—–]|!\[|^\s*[-+>]\s", text):
             errors.append("不能带括号动作、Markdown或破折号")
-        if handoff_reason(text) or re.search(
+        if handoff_reason(text, wechat=wechat) or re.search(
             r"我.{0,5}(一定|肯定|会|来|帮你|陪你).{0,8}(接你|陪你|给你|做到|处理|买|每天)|明天我来",
             text,
         ):

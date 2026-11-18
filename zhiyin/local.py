@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+import argparse
 import fcntl
 import os
 import stat
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
+
+
+def temporary_state(value: str) -> Path:
+    path = Path(value).expanduser().absolute()
+    resolved = path.resolve()
+    roots = {Path(tempfile.gettempdir()).resolve(), Path("/tmp").resolve()}
+    if not any(resolved != root and resolved.is_relative_to(root) for root in roots):
+        raise argparse.ArgumentTypeError("--state-dir仅供测试，必须是系统临时目录下的子目录")
+    return path
 
 
 class PrivateFiles:

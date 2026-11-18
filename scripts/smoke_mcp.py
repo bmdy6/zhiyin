@@ -38,10 +38,11 @@ async def run() -> dict:
             "list_stages",
             "contact_brief",
             "search_my_replies",
+            "draft_reply",
         }
         for tool in tools:
             assert tool.annotations.readOnlyHint is True
-            assert tool.annotations.openWorldHint is False
+            assert tool.annotations.openWorldHint is (tool.name == "draft_reply")
         stages = await session.call_tool("list_stages", {})
         assert not stages.isError
         assert sum(r["count"] for r in stages.structuredContent["result"]) == 788

@@ -36,7 +36,12 @@ def arrangements(rows: list) -> list[dict]:
         topics = [topic for topic, pattern in ACTIONS.items() if re.search(pattern, text)]
         for topic, (prior, agreed) in list(pending.items()):
             nearby = row["time"] - prior["time"] < 21600
-            if CLOSED.search(text) and (topic in topics or (nearby and len(pending) == 1)):
+            received = topic == "办事" and bool(re.search(r"^收到", text))
+            topical_match = topic in topics or received
+            if CLOSED.search(text) and (
+                topical_match
+                or (nearby and not topics and not text.startswith("收到") and len(pending) == 1)
+            ):
                 del pending[topic]
             elif nearby and row["sender"] != prior["sender"] and AGREE.fullmatch(text.strip()):
                 pending[topic] = (prior, True)

@@ -8,3 +8,7 @@ dist/
 *.egg-info/
 .env
 .env.*
+.zhiyin/
+.chat-twin/
+/wechat.sqlite3*
+/口吻.md

@@ -1,44 +1,40 @@
-"""Command-line drafts only: no applications, UI automation or message sending."""
+"""Import local WeChat exports, inspect history and draft replies."""
 
 import argparse
 import asyncio
 import json
 import sys
-import tempfile
 from pathlib import Path
 
 from zhiyin.brief import contact_brief
 from zhiyin.contacts import ContactStore
 from zhiyin.draft import DraftEngine
 from zhiyin.llm import DeepSeek
+from zhiyin.local import temporary_state
 from zhiyin.my_replies import ReplySearch
 from zhiyin.resources import ROOT
+from zhiyin.safety import parse_chat
 from zhiyin.sample_client import SampleClient
 from zhiyin.tone import tone_profile
 from zhiyin.wechat import EXPORT, WeChatStore, import_wechat
-
-
-def temporary_state(value: str) -> Path:
-    path = Path(value).expanduser().absolute()
-    resolved = path.resolve()
-    roots = {Path(tempfile.gettempdir()).resolve(), Path("/tmp").resolve()}
-    if not any(resolved != root and resolved.is_relative_to(root) for root in roots):
-        raise argparse.ArgumentTypeError("--state-dir仅供测试，必须是系统临时目录下的子目录")
-    return path
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     for name in ("draft", "promote"):
-        command = commands.add_parser(name)
+        command = commands.add_parser(
+            name, aliases=["draft_reply", "draft-reply"] if name == "draft" else []
+        )
         command.add_argument("--platform", choices=["wechat"], default="wechat")
         command.add_argument("--contact", required=True)
         command.add_argument(
             "--state-dir", type=temporary_state, help="仅测试用的临时目录；默认 ~/.zhiyin/"
         )
         if name == "draft":
-            command.add_argument("--input", required=True, type=Path)
+            incoming = command.add_mutually_exclusive_group(required=True)
+            incoming.add_argument("--input", type=Path)
+            incoming.add_argument("--message")
             command.add_argument("--goal")
             command.add_argument("--index-dir", type=Path, default=ROOT / "data/index")
             command.add_argument("--model-cache", type=Path, default=ROOT / "data/cache/models")
@@ -89,13 +85,19 @@ def main():
             print("已升级为独立联系人档案")
             return
         # Read bounded input; failures never print contents or a provider traceback.
-        with args.input.expanduser().open(encoding="utf-8") as handle:
-            text = handle.read(10001)
+        history = []
+        message = args.message
+        if args.input is not None:
+            with args.input.expanduser().open(encoding="utf-8") as handle:
+                history = parse_chat(handle.read(10001))
+            message = history.pop()["text"]
 
         async def draft():
+            replies = ReplySearch(WeChatStore(args.state_dir), args.model_cache)
             async with SampleClient(args.index_dir, args.model_cache) as samples:
-                return await DraftEngine(DeepSeek(), samples, store).run(
-                    args.platform, args.contact, text, goal=args.goal
+                engine = DraftEngine(DeepSeek(), samples, replies=replies)
+                return await engine.run_wechat(
+                    args.contact, message, goal=args.goal, history=history
                 )
 
         print(asyncio.run(draft()).render())
@@ -103,7 +105,7 @@ def main():
         print("输入或联系人存储不可用，请检查格式、路径和权限", file=sys.stderr)
         raise SystemExit(2) from None
     except Exception:  # noqa: BLE001 -- redact private provider/input errors at boundary
-        print("草稿流程失败，未自动发送任何消息", file=sys.stderr)
+        print("知音命令失败，请检查本地配置和资源", file=sys.stderr)
         raise SystemExit(1) from None
 
 
