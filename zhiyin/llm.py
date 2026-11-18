@@ -6,7 +6,7 @@ from pathlib import Path
 
 import httpx
 
-from chat_twin.resources import resource
+from zhiyin.resources import resource
 
 MODEL = "deepseek-flash"
 ENDPOINT = "https://api.deepseek.com/chat/completions"

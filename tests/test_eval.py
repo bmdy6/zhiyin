@@ -3,8 +3,8 @@ from pathlib import Path
 
 import httpx
 
-from chat_twin.retrieval import sha256
 from scripts import generate_eval
+from zhiyin.retrieval import sha256
 
 ROOT = Path(__file__).resolve().parents[1]
 

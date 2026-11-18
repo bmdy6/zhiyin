@@ -3,7 +3,7 @@
 import argparse
 from pathlib import Path
 
-from chat_twin.retrieval import ROOT, build_index
+from zhiyin.retrieval import ROOT, build_index
 
 
 def main():

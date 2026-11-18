@@ -294,44 +294,6 @@ wheels = [
 ]
 
 [[package]]
-name = "chat-twin"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "fastembed" },
-    { name = "httpx" },
-    { name = "jieba" },
-    { name = "mcp" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
-    { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "pydantic" },
-    { name = "rank-bm25" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "fastembed", specifier = ">=0.7,<1" },
-    { name = "httpx", specifier = ">=0.28,<1" },
-    { name = "jieba", specifier = ">=0.42.1,<1" },
-    { name = "mcp", specifier = ">=1.20,<2" },
-    { name = "numpy", specifier = ">=2,<3" },
-    { name = "pydantic", specifier = ">=2,<3" },
-    { name = "rank-bm25", specifier = ">=0.2.2,<1" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=8,<10" },
-    { name = "ruff", specifier = ">=0.14,<1" },
-]
-
-[[package]]
 name = "click"
 version = "8.5.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1800,4 +1762,42 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/1a/e4/f0f252c65f9bf7c4042b1f707ef338d49f799da582234e1d3e6e2cfca291/win32_setctime-1.2.1.tar.gz", hash = "sha256:077b35471bf1ff1d71e165c919ddc0cecf51b8e1802f5d820d33a96e2f6717dd", size = 4983, upload-time = "2026-10-25T18:21:32.318Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/bd/df/5593480bc1e932eeae28e4fa182ab68174edd0d77409ced3b6491d02d1d5/win32_setctime-1.2.1-py3-none-any.whl", hash = "sha256:a9edc685b35414bec69392c866ed82456ad125ac4a6a4b703ec1d8b462d4f477", size = 4215, upload-time = "2026-10-25T18:21:30.939Z" },
+]
+
+[[package]]
+name = "zhiyin"
+version = "0.2.0"
+source = { editable = "." }
+dependencies = [
+    { name = "fastembed" },
+    { name = "httpx" },
+    { name = "jieba" },
+    { name = "mcp" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "pydantic" },
+    { name = "rank-bm25" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastembed", specifier = ">=0.7,<1" },
+    { name = "httpx", specifier = ">=0.28,<1" },
+    { name = "jieba", specifier = ">=0.42.1,<1" },
+    { name = "mcp", specifier = ">=1.20,<2" },
+    { name = "numpy", specifier = ">=2,<3" },
+    { name = "pydantic", specifier = ">=2,<3" },
+    { name = "rank-bm25", specifier = ">=0.2.2,<1" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8,<10" },
+    { name = "ruff", specifier = ">=0.14,<1" },
 ]

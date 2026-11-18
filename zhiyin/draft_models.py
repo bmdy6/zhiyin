@@ -24,13 +24,28 @@ class Decision(Contract):
     reason: Line
 
 
+Rule = Annotated[StrictInt, Field(ge=1, le=6)]
+
+
+class Rationale(Contract):
+    reference: Annotated[str, Field(pattern=r"^R[1-5]$")]
+    rules: Annotated[list[Rule], Field(min_length=1, max_length=6)]
+
+
+class RuleReview(Contract):
+    rule: Rule
+    passed: bool
+
+
 class Candidate(Contract):
     wait_minutes: Annotated[StrictInt, Field(ge=0, le=10)]
     messages: list[str]
     reason: Line
+    rationales: Annotated[list[Rationale], Field(max_length=3)] | None = None
 
 
 class Review(Contract):
     passed: bool
     issues: list[Line]
     handoff: bool
+    rules: Annotated[list[RuleReview], Field(max_length=6)] | None = None

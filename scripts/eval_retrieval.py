@@ -13,8 +13,8 @@ from pathlib import Path
 
 import numpy as np
 
-from chat_twin.retrieval import CANDIDATES, ROOT, RRF_CONSTANT, Retriever, sha256
 from scripts.offline import deny_network
+from zhiyin.retrieval import CANDIDATES, ROOT, RRF_CONSTANT, Retriever, sha256
 
 
 def evaluate(retriever: Retriever, queries: list[dict], repeats: int) -> dict:

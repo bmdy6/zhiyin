@@ -1,6 +1,6 @@
 import pytest
 
-from chat_twin.safety import draft_errors, handoff_reason, parse_chat
+from zhiyin.safety import draft_errors, handoff_reason, parse_chat
 
 
 def test_chat_parser():

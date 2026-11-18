@@ -4,7 +4,7 @@ import sys
 
 def command(*args):
     return subprocess.run(
-        [sys.executable, "-m", "chat_twin.cli", *args], capture_output=True, text=True, check=False
+        [sys.executable, "-m", "zhiyin.cli", *args], capture_output=True, text=True, check=False
     )
 
 
@@ -15,7 +15,7 @@ def test_cli_risk_and_manual_promote(tmp_path):
     result = command(
         "draft",
         "--platform",
-        "soul",
+        "wechat",
         "--contact",
         "合成",
         "--input",
@@ -26,10 +26,10 @@ def test_cli_risk_and_manual_promote(tmp_path):
     assert result.returncode == 0, result.stderr
     assert "[交给你]" in result.stdout and "[发送]" not in result.stdout
     result = command(
-        "promote", "--platform", "soul", "--contact", "合成", "--state-dir", str(state)
+        "promote", "--platform", "wechat", "--contact", "合成", "--state-dir", str(state)
     )
     assert result.returncode == 0
-    assert (state / "contacts/soul/合成.md").exists()
+    assert (state / "contacts/wechat/合成.md").exists()
 
 
 def test_cli_invalid_input_writes_nothing(tmp_path):
@@ -39,7 +39,7 @@ def test_cli_invalid_input_writes_nothing(tmp_path):
     result = command(
         "draft",
         "--platform",
-        "soul",
+        "wechat",
         "--contact",
         "合成",
         "--input",
@@ -53,6 +53,6 @@ def test_cli_invalid_input_writes_nothing(tmp_path):
 
 def test_state_override_cannot_write_non_temporary_location():
     result = command(
-        "promote", "--platform", "soul", "--contact", "合成", "--state-dir", "/Users/shared-state"
+        "promote", "--platform", "wechat", "--contact", "合成", "--state-dir", "/Users/shared-state"
     )
     assert result.returncode != 0

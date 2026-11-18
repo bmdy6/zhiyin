@@ -11,14 +11,14 @@ import numpy as np
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from chat_twin.retrieval import ROOT, sha256
+from zhiyin.retrieval import ROOT, sha256
 
 
 async def run() -> dict:
     queries = [json.loads(s) for s in (ROOT / "evals/retrieval.jsonl").read_text().splitlines()]
     # Explicit absolute resource paths also exercise the wheel-install use case.
     params = StdioServerParameters(
-        command=str(Path(sys.executable).parent / "chat-twin-mcp"),
+        command=str(Path(sys.executable).parent / "zhiyin-mcp"),
         args=[
             "--index-dir",
             str(ROOT / "data/index"),
@@ -33,10 +33,16 @@ async def run() -> dict:
     ):
         await session.initialize()
         tools = (await session.list_tools()).tools
-        assert {tool.name for tool in tools} == {"search_samples", "list_stages"}
+        assert {tool.name for tool in tools} == {
+            "search_samples",
+            "list_stages",
+            "contact_brief",
+            "search_my_replies",
+            "draft_reply",
+        }
         for tool in tools:
             assert tool.annotations.readOnlyHint is True
-            assert tool.annotations.openWorldHint is False
+            assert tool.annotations.openWorldHint is (tool.name == "draft_reply")
         stages = await session.call_tool("list_stages", {})
         assert not stages.isError
         assert sum(r["count"] for r in stages.structuredContent["result"]) == 788
@@ -65,7 +71,7 @@ async def run() -> dict:
         assert unknown.isError
     return {
         "transport": "stdio",
-        "entrypoint": "chat-twin-mcp",
+        "entrypoint": "zhiyin-mcp",
         "tools": sorted(t.name for t in tools),
         "queries": len(times),
         "hits_at_5": hits,

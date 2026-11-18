@@ -2,8 +2,8 @@ import asyncio
 import copy
 import json
 
-from chat_twin.contacts import ContactStore
-from chat_twin.draft import DraftEngine
+from zhiyin.contacts import ContactStore
+from zhiyin.draft import DraftEngine
 
 ANALYSIS = {
     "summary": "对方分享了猫抢椅子的趣事",
@@ -52,7 +52,7 @@ def engine(tmp_path, responses):
 
 def run(instance, **kwargs):
     return asyncio.run(
-        instance.run("soul", "合成猫友", "我: 猫睡了吗\n她: 它把我的椅子抢了", **kwargs)
+        instance.run("wechat", "合成猫友", "我: 猫睡了吗\n她: 它把我的椅子抢了", **kwargs)
     )
 
 
@@ -71,7 +71,7 @@ def test_friend_draft_and_private_style_only_sent_to_writing(tmp_path):
 
 def test_risk_no_model_or_search(tmp_path):
     instance, model, search = engine(tmp_path, [])
-    result = asyncio.run(instance.run("soul", "合成", "她: 你是机器人吗"))
+    result = asyncio.run(instance.run("wechat", "合成", "她: 你是机器人吗"))
     assert result.handoff and not result.messages
     assert not model.calls and not search.calls
 
@@ -161,3 +161,105 @@ def test_style_verbatim_not_exposed_even_if_model_check_misses_it(tmp_path):
     assert result.handoff and secret not in result.render()
 
     assert [step for step, _ in model.calls] == ["analyze", "decide", "write", "write"]
+
+
+class MyReplies:
+    def __init__(self, store, rows):
+        self.store, self.rows = store, rows
+        self.calls = []
+
+    def search(self, message, contact, k):
+        self.calls.append((message, contact, k))
+        return self.rows
+
+
+def wechat_engine(tmp_path, responses, *, has_personal=True):
+    from test_wechat import export, msg
+
+    from zhiyin.tone import tone_profile
+    from zhiyin.wechat import WeChatStore, import_wechat
+
+    store = WeChatStore(tmp_path / "state")
+    export(
+        tmp_path / "export",
+        {
+            "合成猫友": [
+                msg(0, "them", "合成语境，猫睡了"),
+                msg(1, "me", "合成口吻例子呀"),
+            ]
+        },
+    )
+    store.root.mkdir()
+    (store.root / "config.toml").write_text('[relationships]\n"C1" = "朋友"')
+    import_wechat(store, tmp_path / "export")
+    tone_profile(store)
+    style = tmp_path / "spoken.md"
+    style.write_text("简短，轻松")
+    rows = [{"id": "synthetic-1", "date": "2026-01-01", "her": "猫在干嘛", "reply": "它刚睡觉去了"}]
+    model, samples = Model(responses), Search()
+    return (
+        DraftEngine(
+            model,
+            samples,
+            replies=MyReplies(store, rows if has_personal else []),
+            style_path=style,
+        ),
+        model,
+        samples,
+    )
+
+
+WECHAT_GOOD = dict(GOOD, rationales=[{"reference": "R1", "rules": [2]}])
+WECHAT_CHECK = dict(CHECK, rules=[{"rule": i, "passed": True} for i in range(1, 7)])
+
+
+def test_wechat_draft_uses_personal_first_and_returns_per_draft_source(tmp_path):
+    instance, model, samples = wechat_engine(
+        tmp_path, [ANALYSIS, DECISION, WECHAT_GOOD, WECHAT_CHECK]
+    )
+    result = asyncio.run(instance.run_wechat("合成猫友", "它把我的椅子抢了")).as_tool_result()
+    assert result["status"] == "草稿"
+    assert not samples.calls
+    assert result["drafts"][0]["reference"]["id"] == "synthetic-1"
+    assert "2026-01-01" in result["drafts"][0]["reason"]
+    assert "规则2" in result["drafts"][0]["reason"]
+    payload = model.calls[2][1]
+    assert "## 朋友" in payload["wechat_tone"]
+    assert "合成口吻例子呀" not in payload["wechat_tone"]
+    assert payload["spoken_style"] == "简短，轻松"
+
+
+def test_wechat_draft_uses_public_only_if_no_personal_match(tmp_path):
+    instance, _model, samples = wechat_engine(
+        tmp_path, [ANALYSIS, DECISION, WECHAT_GOOD, WECHAT_CHECK], has_personal=False
+    )
+    result = asyncio.run(instance.run_wechat("C1", "它把我的椅子抢了"))
+    assert samples.calls
+    assert result.drafts[0]["reference"]["source"] == "public"
+
+
+def test_wechat_draft_rewrites_after_rule_failures_then_hands_off(tmp_path):
+    bad = dict(WECHAT_GOOD, messages=["考了多少分？"])
+    failed = dict(
+        WECHAT_CHECK,
+        passed=True,
+        rules=[{"rule": i, "passed": i != 1} for i in range(1, 7)],
+    )
+    instance, model, _ = wechat_engine(tmp_path, [ANALYSIS, DECISION, bad, WECHAT_GOOD, failed])
+    result = asyncio.run(instance.run_wechat("C1", "我有点失落，这次考砸了"))
+    assert result.as_tool_result()["status"] == "这条你自己回"
+    assert result.drafts == []
+    assert any("规则2" in check for check in result.checks)
+    assert any("规则1" in check for check in result.checks)
+    assert [step for step, _ in model.calls] == ["analyze", "decide", "write", "write", "check"]
+
+
+def test_wechat_risk_and_exclusion_stop_before_model(tmp_path):
+    instance, model, samples = wechat_engine(tmp_path, [])
+    blocked = ("要转账吗", "我们见面吧", "你是不是本人", "我不想活了", "你能保证吗")
+    for message in blocked:
+        assert asyncio.run(instance.run_wechat("C1", message)).handoff
+    (instance.replies.store.root / "config.toml").write_text('exclude_contacts=["C1"]\n')
+    result = asyncio.run(instance.run_wechat("合成猫友", "熟悉的小问题"))
+    assert result.handoff
+    assert not model.calls and not samples.calls and not instance.replies.calls

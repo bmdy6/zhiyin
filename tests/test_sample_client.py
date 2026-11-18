@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from chat_twin.sample_client import SampleClient
+from zhiyin.sample_client import SampleClient
 
 
 @pytest.mark.skipif(

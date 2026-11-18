@@ -3,7 +3,7 @@ import json
 import numpy as np
 import pytest
 
-from chat_twin.retrieval import Retriever, build_index, reciprocal_rank_fusion, tokenize
+from zhiyin.retrieval import Retriever, build_index, reciprocal_rank_fusion, tokenize
 
 
 class Encoder:
@@ -121,7 +121,7 @@ def test_two_lanes_take_thirty_after_filtering(tmp_path):
 
 
 def test_committed_index_only_contains_retained_public_samples():
-    from chat_twin.retrieval import ROOT, sha256
+    from zhiyin.retrieval import ROOT, sha256
 
     source = ROOT / "data/samples.jsonl"
     samples = [json.loads(s) for s in source.read_text().splitlines()]

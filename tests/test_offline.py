@@ -28,7 +28,7 @@ def test_real_model_load_and_query_never_attempt_network():
     if not (ROOT / "data/cache/models").is_dir():
         pytest.skip("Run scripts/build_index.py once to download the local model")
     run_child("""
-        from chat_twin.retrieval import Retriever
+        from zhiyin.retrieval import Retriever
         from scripts.offline import deny_network
         with deny_network() as attempts:
             retriever = Retriever()
@@ -44,7 +44,7 @@ def test_missing_cache_fails_offline_without_download():
     run_child("""
         from pathlib import Path
         from tempfile import TemporaryDirectory
-        from chat_twin.retrieval import load_encoder
+        from zhiyin.retrieval import load_encoder
         from scripts.offline import deny_network
         with TemporaryDirectory() as directory, deny_network() as attempts:
             try:
