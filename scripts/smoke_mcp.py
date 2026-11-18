@@ -37,11 +37,13 @@ async def run() -> dict:
             "search_samples",
             "list_stages",
             "contact_brief",
+            "suggest_relationships",
+            "set_relationship",
             "search_my_replies",
             "draft_reply",
         }
         for tool in tools:
-            assert tool.annotations.readOnlyHint is True
+            assert tool.annotations.readOnlyHint is (tool.name != "set_relationship")
             assert tool.annotations.openWorldHint is (tool.name == "draft_reply")
         stages = await session.call_tool("list_stages", {})
         assert not stages.isError

@@ -15,7 +15,8 @@ from pathlib import Path
 from zhiyin.local import PrivateFiles
 
 EXPORT = Path.home() / "Documents/knowledge-mcp/private/微信聊天"
-RELATIONSHIPS = ("家人", "朋友", "同事", "陌生人或办事", "未分类")
+RELATIONSHIPS = ("家人", "朋友", "同事", "办事", "未分类", "其他")
+LEGACY_RELATIONSHIP = "陌生人或办事"
 CHAT_TIMEZONE = timezone(timedelta(hours=8))
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS contacts (
@@ -38,11 +39,16 @@ CREATE TEMP TABLE excluded (value TEXT PRIMARY KEY);
 CREATE TEMP TABLE relationship_config (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TEMP VIEW visible_contacts AS
 SELECT c.id, c.code, c.label,
-       coalesce(ri.value, rc.value, rl.value, c.relationship) AS relationship
+       coalesce(ri.value, rc.value, rl.value,
+                CASE c.relationship WHEN '陌生人或办事' THEN '办事' ELSE c.relationship END
+       ) AS relationship
 FROM contacts c
 LEFT JOIN relationship_config ri ON ri.key=c.id
+-- A configured ID belongs only to its own contact, even if another contact uses it as an alias.
 LEFT JOIN relationship_config rc ON rc.key=c.code
+    AND NOT EXISTS (SELECT 1 FROM contacts WHERE id=rc.key)
 LEFT JOIN relationship_config rl ON rl.key=c.label
+    AND NOT EXISTS (SELECT 1 FROM contacts WHERE id=rl.key)
 WHERE NOT EXISTS (
     SELECT 1 FROM excluded e WHERE e.value IN (c.id, c.code, c.label)
 );
@@ -75,10 +81,14 @@ class WeChatStore(PrivateFiles):
         ):
             raise ValueError("exclude_contacts 须为字符串列表")
         if not isinstance(relations, dict) or any(
-            value not in RELATIONSHIPS for value in relations.values()
+            value not in RELATIONSHIPS and value != LEGACY_RELATIONSHIP
+            for value in relations.values()
         ):
             raise ValueError("relationships 含未支持的分类")
-        return {value.strip() for value in excluded}, relations
+        return {value.strip() for value in excluded}, {
+            key: "办事" if value == LEGACY_RELATIONSHIP else value
+            for key, value in relations.items()
+        }
 
     @contextmanager
     def connect(self, *, write: bool = False):
@@ -88,21 +98,38 @@ class WeChatStore(PrivateFiles):
                 fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
                 os.close(fd)
             path.chmod(0o600)
-            db = sqlite3.connect(path)
-            db.row_factory = sqlite3.Row
-            try:
-                db.execute("PRAGMA foreign_keys = ON")
+            with self._connection(path, write=write) as db:
+                yield db
+
+    @contextmanager
+    def read_existing(self):
+        """Read the current index without creating files or triggering legacy migration."""
+        path = self._path("wechat.sqlite3")
+        if not path.exists():
+            yield None
+            return
+        with self._connection(path, readonly=True) as db:
+            yield db
+
+    @contextmanager
+    def _connection(self, path: Path, *, readonly: bool = False, write: bool = False):
+        uri = path.as_uri() + "?mode=ro" if readonly else path
+        db = sqlite3.connect(uri, uri=readonly)
+        db.row_factory = sqlite3.Row
+        try:
+            db.execute("PRAGMA foreign_keys = ON")
+            if not readonly:
                 db.executescript(SCHEMA)
-                db.executescript(VISIBLE)
-                excluded, relations = self.config()
-                db.executemany("INSERT INTO excluded VALUES (?)", [(value,) for value in excluded])
-                db.executemany("INSERT INTO relationship_config VALUES (?, ?)", relations.items())
-                if write:
-                    db.execute("PRAGMA secure_delete = ON")
-                with db:
-                    yield db
-            finally:
-                db.close()
+            db.executescript(VISIBLE)
+            excluded, relations = self.config()
+            db.executemany("INSERT INTO excluded VALUES (?)", [(value,) for value in excluded])
+            db.executemany("INSERT INTO relationship_config VALUES (?, ?)", relations.items())
+            if write:
+                db.execute("PRAGMA secure_delete = ON")
+            with db:
+                yield db
+        finally:
+            db.close()
 
     def contact(self, db: sqlite3.Connection, contact: str) -> sqlite3.Row | None:
         """Exact, unambiguous resolution by conversation ID, code, or display label."""
@@ -185,7 +212,7 @@ def import_wechat(store: WeChatStore, source: Path = EXPORT) -> dict[str, int]:
                 db.execute("DELETE FROM contacts WHERE id=?", (contact[0],))
                 skipped += 1
                 continue
-            if contact[3] not in RELATIONSHIPS:
+            if contact[3] not in RELATIONSHIPS and contact[3] != LEGACY_RELATIONSHIP:
                 raise ValueError("导出清单中的关系分组无效")
             db.execute(
                 "INSERT INTO contacts VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET "
