@@ -114,6 +114,16 @@ def reciprocal_rank_fusion(rankings: list[list[int]], *, constant: int = RRF_CON
     return sorted(scores.items(), key=lambda item: (-item[1], item[0]))
 
 
+def hybrid_rank(eligible, lexical, semantic, *, min_similarity=None):
+    positions = np.argsort(-lexical, kind="stable")[:CANDIDATES]
+    lexical_rank = eligible[positions[lexical[positions] > 0]].tolist()
+    if min_similarity is not None:
+        meets_threshold = semantic >= min_similarity
+        eligible, semantic = eligible[meets_threshold], semantic[meets_threshold]
+    semantic_rank = eligible[np.argsort(-semantic, kind="stable")[:CANDIDATES]].tolist()
+    return reciprocal_rank_fusion([lexical_rank, semantic_rank])
+
+
 class Retriever:
     def __init__(
         self,
@@ -176,16 +186,12 @@ class Retriever:
         )
         if not len(eligible):
             return []
-        lexical_all = self.bm25.get_scores(query_tokens)
-        lexical = lexical_all[eligible]
-        lexical_rank = eligible[np.argsort(-lexical, kind="stable")[:CANDIDATES]]
-        lexical_rank = [int(i) for i in lexical_rank if lexical_all[i] > 0]
+        lexical = self.bm25.get_scores(query_tokens)[eligible]
         vector = normalized(list(self.encoder.query_embed(message)))[0]
         if len(vector) != self.vectors.shape[1]:
             raise ValueError("Query embedding dimension differs from index; rebuild index")
         semantic = self.vectors[eligible] @ vector
-        semantic_rank = eligible[np.argsort(-semantic, kind="stable")[:CANDIDATES]].tolist()
-        combined = reciprocal_rank_fusion([lexical_rank, semantic_rank])
+        combined = hybrid_rank(eligible, lexical, semantic)
         return [
             dict({key: self.docs[i][key] for key in FIELDS}, score=float(score))
             for i, score in combined[:k]

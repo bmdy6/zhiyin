@@ -11,6 +11,7 @@ from zhiyin.brief import contact_brief
 from zhiyin.contacts import ContactStore
 from zhiyin.draft import DraftEngine
 from zhiyin.llm import DeepSeek
+from zhiyin.my_replies import ReplySearch
 from zhiyin.resources import ROOT
 from zhiyin.sample_client import SampleClient
 from zhiyin.tone import tone_profile
@@ -44,16 +45,28 @@ def main():
     importer = commands.add_parser("import_wechat", aliases=["import-wechat"])
     importer.add_argument("--source", type=Path, default=EXPORT)
     importer.add_argument("--state-dir", type=temporary_state)
+    importer.add_argument("--prepare-search", action="store_true")
+    importer.add_argument("--model-cache", type=Path, default=ROOT / "data/cache/models")
     tone = commands.add_parser("tone_profile", aliases=["tone-profile"])
     tone.add_argument("--state-dir", type=temporary_state)
     brief = commands.add_parser("contact_brief", aliases=["contact-brief"])
     brief.add_argument("contact")
     brief.add_argument("--state-dir", type=temporary_state)
+    search = commands.add_parser("search_my_replies", aliases=["search-my-replies"])
+    search.add_argument("message")
+    search.add_argument("--contact")
+    search.add_argument("-k", type=int, default=5)
+    search.add_argument("--model-cache", type=Path, default=ROOT / "data/cache/models")
+    search.add_argument("--state-dir", type=temporary_state)
     args = parser.parse_args()
     store = ContactStore(args.state_dir)
     try:
         if args.command in {"import_wechat", "import-wechat"}:
-            print(json.dumps(import_wechat(WeChatStore(args.state_dir), args.source)))
+            wechat = WeChatStore(args.state_dir)
+            stats = import_wechat(wechat, args.source)
+            if args.prepare_search:
+                stats["search_contexts"] = ReplySearch(wechat, args.model_cache).prepare()
+            print(json.dumps(stats))
             return
         if args.command in {"tone_profile", "tone-profile"}:
             print(json.dumps(tone_profile(WeChatStore(args.state_dir))))
@@ -63,6 +76,12 @@ def main():
                 json.dumps(
                     contact_brief(WeChatStore(args.state_dir), args.contact), ensure_ascii=False
                 )
+            )
+            return
+        if args.command in {"search_my_replies", "search-my-replies"}:
+            replies = ReplySearch(WeChatStore(args.state_dir), args.model_cache)
+            print(
+                json.dumps(replies.search(args.message, args.contact, args.k), ensure_ascii=False)
             )
             return
         if args.command == "promote":

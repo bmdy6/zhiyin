@@ -26,6 +26,10 @@ CREATE TABLE IF NOT EXISTS messages (
     time REAL NOT NULL, seq INTEGER NOT NULL, sender TEXT NOT NULL,
     type INTEGER NOT NULL, subtype INTEGER, text TEXT NOT NULL, is_text INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS reply_embeddings (
+    prior_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+    version TEXT NOT NULL, vector BLOB NOT NULL
+);
 CREATE INDEX IF NOT EXISTS messages_contact_time ON messages(contact_id, time, seq);
 CREATE INDEX IF NOT EXISTS messages_sender_time ON messages(contact_id, sender, time, seq);
 """
@@ -44,13 +48,13 @@ WHERE NOT EXISTS (
 );
 -- Same-second rows follow their original order. A six-hour gap is a new conversation.
 CREATE TEMP VIEW reply_pairs AS
-SELECT m.id, m.contact_id, m.time, m.seq, m.text AS reply, p.id AS prior_id, p.text AS her
+SELECT m.id, m.contact_id, m.time, m.seq, m.rowid AS position, m.text AS reply, p.id AS prior_id, p.text AS her
 FROM visible_contacts c JOIN messages m ON c.id=m.contact_id
 JOIN messages p ON p.id=(
     SELECT q.id FROM messages q
     WHERE q.contact_id=m.contact_id AND q.sender='them' AND q.type NOT IN (10000, 10002)
-      AND (q.time, q.seq) < (m.time, m.seq) AND q.time > m.time-21600
-    ORDER BY q.time DESC, q.seq DESC, q.id DESC LIMIT 1
+      AND (q.time, q.seq, q.rowid) < (m.time, m.seq, m.rowid) AND q.time > m.time-21600
+    ORDER BY q.time DESC, q.seq DESC, q.rowid DESC LIMIT 1
 )
 WHERE m.sender='me' AND m.is_text AND p.is_text;
 """

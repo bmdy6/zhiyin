@@ -145,3 +145,42 @@ def test_brief_has_recent_context_and_open_arrangements(tmp_path):
     assert result["open_arrangements"][0]["status"] == "已回应，未见落实"
     (store.root / "config.toml").write_text('exclude_contacts = ["C1"]\n')
     assert contact_brief(store, "合成甲") == {"found": False}
+
+
+def test_reply_search_prefers_contact_then_relationship_and_forgets_exclusion(tmp_path):
+    from zhiyin.my_replies import ReplySearch
+
+    class Encoder:
+        embeds = 0
+
+        def embed(self, texts, *, batch_size):
+            self.embeds += len(texts)
+            return ([1, 0] for _ in texts)
+
+        def query_embed(self, text):
+            return [[0, 1] if text == "合成不相关" else [1, 0]]
+
+    root = tmp_path / "export"
+    store = WeChatStore(tmp_path / "state")
+    export(
+        root,
+        {
+            "合成甲": [msg(0, "them", "泡茶"), msg(1, "me", "选绿茶"), msg(2, "me", "少泡会")],
+            "合成乙": [msg(0, "them", "喝茶"), msg(3, "me", "我喜欢红茶")],
+            "合成丙": [msg(0, "them", "泡新茶"), msg(5, "me", "我喜欢乌龙")],
+        },
+    )
+    import_wechat(store, root)
+    config = store.root / "config.toml"
+    config.write_text('[relationships]\n"C1" = "朋友"\n"C2" = "朋友"\n')
+    encoder = Encoder()
+    search = ReplySearch(store, encoder=encoder)
+    rows = search.search("泡茶", "合成甲")
+    assert [row["contact"] for row in rows] == ["合成甲", "合成乙", "合成丙"]
+    assert (rows[0]["date"], rows[0]["reply"]) == ("2026-01-01", "选绿茶")
+    assert encoder.embeds == 3
+    assert ReplySearch(store, encoder=encoder).search("合成不相关") == []
+    assert encoder.embeds == 3
+    config.write_text('exclude_contacts = ["C1"]\n')
+    assert search.search("泡茶", "合成甲") == []
+    assert [row["contact"] for row in search.search("泡茶")] == ["合成丙", "合成乙"]

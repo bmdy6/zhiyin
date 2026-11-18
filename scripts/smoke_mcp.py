@@ -33,7 +33,12 @@ async def run() -> dict:
     ):
         await session.initialize()
         tools = (await session.list_tools()).tools
-        assert {tool.name for tool in tools} == {"search_samples", "list_stages", "contact_brief"}
+        assert {tool.name for tool in tools} == {
+            "search_samples",
+            "list_stages",
+            "contact_brief",
+            "search_my_replies",
+        }
         for tool in tools:
             assert tool.annotations.readOnlyHint is True
             assert tool.annotations.openWorldHint is False
