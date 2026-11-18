@@ -12,6 +12,7 @@ from zhiyin.draft import DraftEngine
 from zhiyin.llm import DeepSeek
 from zhiyin.resources import ROOT
 from zhiyin.sample_client import SampleClient
+from zhiyin.tone import tone_profile
 from zhiyin.wechat import EXPORT, WeChatStore, import_wechat
 
 
@@ -42,11 +43,16 @@ def main():
     importer = commands.add_parser("import_wechat", aliases=["import-wechat"])
     importer.add_argument("--source", type=Path, default=EXPORT)
     importer.add_argument("--state-dir", type=temporary_state)
+    tone = commands.add_parser("tone_profile", aliases=["tone-profile"])
+    tone.add_argument("--state-dir", type=temporary_state)
     args = parser.parse_args()
     store = ContactStore(args.state_dir)
     try:
         if args.command in {"import_wechat", "import-wechat"}:
             print(json.dumps(import_wechat(WeChatStore(args.state_dir), args.source)))
+            return
+        if args.command in {"tone_profile", "tone-profile"}:
+            print(json.dumps(tone_profile(WeChatStore(args.state_dir))))
             return
         if args.command == "promote":
             store.promote(args.platform, args.contact)

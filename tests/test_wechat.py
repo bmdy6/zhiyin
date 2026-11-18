@@ -79,3 +79,39 @@ def test_invalid_input_rolls_back_complete_import(tmp_path):
         import_wechat(store, root)
     with store.connect() as db:
         assert db.execute("SELECT count(*) FROM messages").fetchone()[0] == 0
+
+
+def test_tone_uses_all_own_bubbles_and_respects_groups_and_exclusions(tmp_path):
+    from zhiyin.tone import PROFILE, tone_profile
+
+    root = tmp_path / "export"
+    store = WeChatStore(tmp_path / "state")
+    export(
+        root,
+        {
+            "合成甲": [
+                msg(0, "them", "不要统计对方这句"),
+                msg(1, "me", "今天泡茶呀！"),
+                msg(2, "me", "刚泡好🙂"),
+                msg(3, "them", "喝茶"),
+                msg(4, "me", "[表情]", 47),
+                msg(5, "me", "[系统]", 10000),
+            ],
+            "合成乙": [msg(0, "me", "排除用的长句")],
+        },
+    )
+    import_wechat(store, root)
+    (store.root / "config.toml").write_text(
+        'exclude_contacts = ["C2"]\n[relationships]\n"C1" = "朋友"\n'
+    )
+    stats = tone_profile(store)
+    assert (stats["sent"], stats["text"], stats["single_runs"], stats["burst_runs"]) == (3, 2, 1, 1)
+    assert stats["groups"][1] == {"sent": 3, "text": 2, "examples": 2}
+    path = store.root / PROFILE
+    first = path.read_bytes()
+    assert "今天泡茶呀！".encode() in first
+    assert "排除用的长句".encode() not in first
+    assert "不要统计对方这句".encode() not in first
+    assert path.stat().st_mode & 0o777 == 0o600
+    assert tone_profile(store) == stats
+    assert path.read_bytes() == first
