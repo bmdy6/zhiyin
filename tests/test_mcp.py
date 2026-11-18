@@ -73,3 +73,59 @@ def test_stdio_wechat_tools_use_only_synthetic_inputs(tmp_path):
             assert "合成隐私占位" not in str(invalid.content)
 
     asyncio.run(check())
+
+
+def test_stdio_relationship_tools_use_only_synthetic_inputs(tmp_path):
+    import subprocess
+    import sys
+    import tempfile
+
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+    from test_wechat import export, msg
+
+    from zhiyin.tone import PROFILE
+    from zhiyin.wechat import WeChatStore, import_wechat
+
+    state = tmp_path / "state"
+    root = tmp_path / "export"
+    export(root, {"合成同事": [msg(0, "me", "合成排期")]})
+    import_wechat(WeChatStore(state), root)
+    config = state / "config.toml"
+    before = config.read_bytes()
+
+    async def check():
+        params = StdioServerParameters(
+            command=sys.executable,
+            env={"TMPDIR": tempfile.gettempdir()},
+            args=["-m", "zhiyin.server", "--state-dir", str(state)],
+        )
+        async with (
+            stdio_client(params) as (reader, writer),
+            ClientSession(reader, writer) as session,
+        ):
+            await session.initialize()
+            tools = {tool.name: tool for tool in (await session.list_tools()).tools}
+            assert tools["suggest_relationships"].annotations.readOnlyHint is True
+            assert tools["set_relationship"].annotations.readOnlyHint is False
+
+            suggestions = await session.call_tool("suggest_relationships", {})
+            assert not suggestions.isError
+            assert suggestions.structuredContent["result"][0]["relationship"] == "同事"
+            assert config.read_bytes() == before
+
+            applied = await session.call_tool(
+                "set_relationship", {"contact": "C1", "relationship": "同事"}
+            )
+            assert not applied.isError
+            assert applied.structuredContent["contact_id"] == "synthetic-1"
+            brief = await session.call_tool("contact_brief", {"contact": "C1"})
+            assert brief.structuredContent["relationship"] == "同事"
+
+    asyncio.run(check())
+    subprocess.run(
+        [sys.executable, "-m", "zhiyin.cli", "tone_profile", "--state-dir", str(state)],
+        check=True,
+        capture_output=True,
+    )
+    assert "合成排期" in (state / PROFILE).read_text().split("## 同事\n")[1].split("\n## ")[0]

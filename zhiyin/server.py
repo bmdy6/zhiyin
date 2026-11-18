@@ -16,6 +16,9 @@ from zhiyin.draft import DraftEngine
 from zhiyin.llm import DeepSeek
 from zhiyin.local import temporary_state
 from zhiyin.my_replies import ReplySearch
+from zhiyin.relationships import Relationship
+from zhiyin.relationships import set_relationship as save_relationship
+from zhiyin.relationships import suggest_relationships as find_relationships
 from zhiyin.retrieval import ROOT, Retriever
 from zhiyin.wechat import WeChatStore
 
@@ -53,6 +56,7 @@ def create_server(
         instructions=(
             "知音支持微信联系人近况、历史回复检索和回复草稿。"
             "草稿会调用 DeepSeek，返回后由本人决定是否使用。"
+            "关系分组建议只读，必须由本人确认具体联系人和关系后，才能调用 set_relationship。"
         ),
         log_level="WARNING",
     )
@@ -78,6 +82,21 @@ def create_server(
     ) -> dict[str, object]:
         """按微信昵称、备注、会话代号或会话 ID 查看聊天近况和待确认约定。"""
         return build_contact_brief(store, contact)
+
+    @server.tool(annotations={"readOnlyHint": True, "openWorldHint": False})
+    def suggest_relationships() -> list[dict]:
+        """依据本地备注、称呼和聊天活跃天数列出待确认的关系分组建议。"""
+        return find_relationships(store)
+
+    @server.tool(
+        annotations={"readOnlyHint": False, "openWorldHint": False, "idempotentHint": True}
+    )
+    def set_relationship(
+        contact: Annotated[str, Field(min_length=1, max_length=200)],
+        relationship: Relationship,
+    ) -> dict[str, str]:
+        """仅在本人明确确认后，按会话 ID、代号或唯一备注保存一个联系人关系。"""
+        return save_relationship(store, contact, relationship)
 
     @server.tool(annotations={"readOnlyHint": True, "openWorldHint": False})
     async def search_my_replies(

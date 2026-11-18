@@ -149,6 +149,7 @@ def test_brief_has_recent_context_and_open_arrangements(tmp_path):
 
 def test_reply_search_prefers_contact_then_relationship_and_forgets_exclusion(tmp_path):
     from zhiyin.my_replies import ReplySearch
+    from zhiyin.relationships import set_relationship
 
     class Encoder:
         embeds = 0
@@ -181,6 +182,159 @@ def test_reply_search_prefers_contact_then_relationship_and_forgets_exclusion(tm
     assert encoder.embeds == 3
     assert ReplySearch(store, encoder=encoder).search("合成不相关") == []
     assert encoder.embeds == 3
+
+    set_relationship(store, "C1", "办事")
+    set_relationship(store, "C3", "办事")
+    rows = search.search("泡茶", "合成甲")
+    assert [row["contact"] for row in rows] == ["合成甲", "合成丙", "合成乙"]
+    assert encoder.embeds == 3
     config.write_text('exclude_contacts = ["C1"]\n')
     assert search.search("泡茶", "合成甲") == []
     assert [row["contact"] for row in search.search("泡茶")] == ["合成丙", "合成乙"]
+
+
+def test_confirmed_relationship_rebuilds_tone_and_preserves_config(tmp_path):
+    import tomllib
+
+    from zhiyin.relationships import set_relationship
+    from zhiyin.tone import PROFILE, tone_profile
+
+    store = WeChatStore(tmp_path / "state")
+    root = tmp_path / "export"
+    export(
+        root,
+        {
+            '合成备注 "甲"': [msg(0, "me", "合成办事短句")],
+            "合成乙": [msg(1, "me", "合成未分组短句")],
+        },
+    )
+    import_wechat(store, root)
+    tone_profile(store)
+    profile = store.root / PROFILE
+    assert "合成办事短句" in profile.read_text().split("## 未分类\n")[1].split("\n## ")[0]
+
+    config = store.root / "config.toml"
+    config.write_text(
+        '# 合成设置\nexclude_contacts = ["C9"]\n'
+        "[relationships]\n'C1' = '陌生人或办事' # 合成旧配置\n"
+        "[settings]\nenabled = true\n"
+    )
+    assert set_relationship(store, '合成备注 "甲"', "办事") == {
+        "contact_id": "synthetic-1",
+        "relationship": "办事",
+    }
+    saved = config.read_text()
+    assert "# 合成旧配置" in saved
+    assert "# 合成设置" in saved
+    assert tomllib.loads(saved) == {
+        "exclude_contacts": ["C9"],
+        "relationships": {"C1": "陌生人或办事", "synthetic-1": "办事"},
+        "settings": {"enabled": True},
+    }
+    assert config.stat().st_mode & 0o777 == 0o600
+    tone_profile(store)
+    grouped = profile.read_text()
+    assert "合成办事短句" in grouped.split("## 办事\n")[1].split("\n## ")[0]
+    assert "合成未分组短句" in grouped.split("## 未分类\n")[1].split("\n## ")[0]
+    assert "## 其他\n" in grouped
+
+    for contact, relationship in [("不存在的合成编号", "其他"), ("C1", "未分类")]:
+        with pytest.raises(ValueError):
+            set_relationship(store, contact, relationship)
+        assert config.read_text() == saved
+    set_relationship(store, "C1", "其他")
+    with store.connect() as db:
+        assert store.contact(db, "C1")["relationship"] == "其他"
+
+
+def test_suggest_relationships_leaves_config_and_index_untouched(tmp_path):
+    from zhiyin.relationships import suggest_relationships
+
+    store = WeChatStore(tmp_path / "state")
+    assert suggest_relationships(store) == []
+    assert not store.root.exists()
+
+    root = tmp_path / "export"
+    export(
+        root,
+        {
+            "合成妈妈": [msg(0, "me", "妈，今天做合成实验")],
+            "合成甲": [msg(0, "me", "老同学，好久不见")],
+            "合成物业": [msg(0, "me", "合成请问")],
+            "合成同事": [msg(0, "me", "发小，合成集合时间")],
+            "合成客服": [msg(0, "me", "合成请求")],
+            "合成乙": [msg(0, "me", "合成普通聊天")],
+            "合成发小": [
+                msg(0, "me", "合成早上好"),
+                {**msg(0, "them", "合成问候"), "time": "2026-01-02T09:00:00+08:00"},
+            ],
+        },
+    )
+    import_wechat(store, root)
+    config = store.root / "config.toml"
+    config.write_text('exclude_contacts = ["C5"]\n[relationships]\n"C3" = "办事"\n')
+    before = {path.name: path.read_bytes() for path in store.root.iterdir()}
+    suggestions = suggest_relationships(store)
+    assert suggestions == [
+        {
+            "contact_id": "synthetic-7",
+            "code": "C7",
+            "relationship": "朋友",
+            "evidence": ["备注关键词"],
+            "active_days": 2,
+        },
+        {
+            "contact_id": "synthetic-1",
+            "code": "C1",
+            "relationship": "家人",
+            "evidence": ["备注关键词", "聊天称呼"],
+            "active_days": 1,
+        },
+        {
+            "contact_id": "synthetic-2",
+            "code": "C2",
+            "relationship": "朋友",
+            "evidence": ["聊天称呼"],
+            "active_days": 1,
+        },
+    ]
+    assert {path.name: path.read_bytes() for path in store.root.iterdir()} == before
+
+
+def test_legacy_relationships_work_without_reimport(tmp_path):
+    root = tmp_path / "export"
+    store = WeChatStore(tmp_path / "state")
+    export(root, {"合成办事": [], "合成未分组": []})
+    manifest_path = root / "导出清单.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["conversations"][0]["relationship"] = "陌生人或办事"
+    manifest_path.write_text(json.dumps(manifest))
+    import_wechat(store, root)
+    with store.connect() as db:
+        stored = db.execute("SELECT relationship FROM contacts WHERE code='C1'").fetchone()[0]
+        assert stored == "陌生人或办事"
+        assert store.contact(db, "C1")["relationship"] == "办事"
+        assert store.contact(db, "C2")["relationship"] == "未分类"
+    (store.root / "config.toml").write_text('[relationships]\n"合成未分组" = "陌生人或办事"\n')
+    with store.connect() as db:
+        assert store.contact(db, "C2")["relationship"] == "办事"
+
+
+def test_set_relationship_only_targets_the_resolved_id(tmp_path):
+    from zhiyin.relationships import set_relationship
+
+    store = WeChatStore(tmp_path / "state")
+    root = tmp_path / "export"
+    export(root, {"合成甲": [], "synthetic-1": [], "C2": []})
+    import_wechat(store, root)
+    config = store.root / "config.toml"
+    before = config.read_bytes()
+    # C2 is both the second contact's code and the third contact's label.
+    with pytest.raises(ValueError):
+        set_relationship(store, "C2", "朋友")
+    assert config.read_bytes() == before
+
+    set_relationship(store, "synthetic-1", "其他")
+    with store.connect() as db:
+        assert store.contact(db, "synthetic-1")["relationship"] == "其他"
+        assert store.contact(db, "synthetic-2")["relationship"] == "未分类"
