@@ -72,6 +72,39 @@ def test_list_privacy_filters_and_no_writes(context_store):
     assert {p.name: p.read_bytes() for p in store.root.iterdir()} == before
 
 
+def test_ambiguous_imported_contacts_preserve_body_and_labels(tmp_path):
+    from test_wechat import msg
+
+    from zhiyin.context import ChatContext
+
+    source = tmp_path / "export"
+    body = "我在等同学（明天见），合成甲说他很难过"
+    export(
+        source,
+        {name: [msg(0, "them", body)] for name in ["我", "在", "同学", "（", "合成甲", "朋友"]},
+    )
+    path = source / "导出清单.json"
+    manifest = json.loads(path.read_text())
+    for entry in manifest["conversations"]:
+        entry["groups"] = ["同学", "哥们 / 人脉（前同事）", "合成甲"]
+        entry["relationship"] = "朋友"
+    path.write_text(json.dumps(manifest))
+    store = WeChatStore(tmp_path / "state")
+    import_wechat(store, source)
+    ctx = ChatContext(store)
+    before = {p.name: p.read_bytes() for p in store.root.iterdir()}
+    expected_groups = sorted(manifest["conversations"][0]["groups"])
+    for row in ctx.list_chats():
+        assert row["groups"] == expected_groups
+        assert row["relationship"] == "朋友"
+    assert ctx.chat_stats("C1")["relationship"] == "朋友"
+    window = ctx.read_window("C1", line=1)
+    assert window["groups"] == expected_groups
+    assert window["messages"][0]["text"] == body.replace("合成甲", "C5")
+    assert ctx.search_messages("难过", "C1")[0]["text"] == body.replace("合成甲", "C5")
+    assert {p.name: p.read_bytes() for p in store.root.iterdir()} == before
+
+
 def test_statistics_have_explicit_denominators(context_store):
     ctx, _ = context_store
     stats = ctx.chat_stats("C1")
@@ -120,6 +153,27 @@ def test_each_candidate_is_bounded_and_marked_as_heuristic(context_store, kind):
         assert moments[0]["reply_line"] == 2
     if kind == "unanswered_end":
         assert moments[0]["line"] == 10
+
+
+@pytest.mark.parametrize(
+    "kind", ["emotion_bid", "burst", "unanswered_end", "self_pivot", "conflict"]
+)
+def test_all_candidate_kinds_preserve_ambiguous_words(context_store, kind):
+    ctx, store = context_store
+    ambiguous = ["我", "在", "同学", "（"]
+    with store.connect(write=True) as db:
+        db.executemany(
+            "INSERT INTO private_aliases VALUES (?, ?)",
+            [(word, f"P90{i}") for i, word in enumerate(ambiguous)],
+        )
+    with ctx.snapshot("C1") as (_, _, messages, _):
+        original = {row["line"]: row["text"] for rows in messages.values() for row in rows}
+    moments = ctx.find_moments(kind, chat="C1", limit=1)
+    assert len(moments) == 1
+    for message in moments[0]["messages"]:
+        for word in ambiguous:
+            assert message["text"].count(word) == original[message["line"]].count(word)
+    assert not any(f"P90{i}" in json.dumps(moments) for i in range(len(ambiguous)))
 
 
 def test_config_rules_and_readonly_reply_context(context_store):
