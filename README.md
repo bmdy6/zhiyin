@@ -2,6 +2,25 @@
 
 知音把本机微信记录提供给 Agent：查统计、翻原文、找历史回复，再由 Agent 分析和起草。默认 MCP 工具只读、离线，不调用模型 API；原文是否交给当前 Agent 由你决定。[需求与验收](https://github.com/bmdy6/zhiyin/issues/6)
 
+## 先导出微信记录
+
+还没有 `导出清单.json` 和各会话的 `chat.jsonl` 时，先使用随仓保留的 [微信导出工具](wechat-export/README.md)。它是独立的 Python 包，保留 `wechat-mac-export` CLI 和 [Agent 技能](wechat-export/skills/wechat-mac-export/SKILL.md)。
+
+```bash
+# 在 zhiyin 仓库根目录；使用独立环境，避免改变知音的锁文件。
+python3 -m venv wechat-export/.venv
+wechat-export/.venv/bin/python -m pip install ./wechat-export
+wechat-export/.venv/bin/wechat-mac-export --help
+```
+
+按导出工具 README 使用本人的数据库副本和已有授权密钥，依次运行 `snapshot`、`verify`、`export`。密钥与输出放在仓库外的私有目录。已有完整导出可以直接进入下方导入步骤。
+
+```bash
+uv run --locked --offline zhiyin import_wechat --source /path/to/private/export
+```
+
+单独安装技能：`npx skills add bmdy6/zhiyin --skill wechat-mac-export`。单独安装后，将本机 profile 的 `repository` 指向克隆项目里的 `wechat-export/`。更新已有知识目录继续使用技能中的 prepare/apply 流程。
+
 ## 安装与导入
 
 需要 Python 3.11+ 和 uv。在仓库根目录执行：

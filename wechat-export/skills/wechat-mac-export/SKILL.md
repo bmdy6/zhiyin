@@ -5,7 +5,7 @@ description: "Use when a user wants to export their own macOS WeChat 4.2.0 chats
 
 # 离线导出 macOS 微信 4.2.0 私聊
 
-项目来源：[bmdy6/wechat-mac-export](https://github.com/bmdy6/wechat-mac-export)。先定位已克隆的项目并读 `README.md`；只有单独安装的 Skill 时，可先克隆项目，再按 README 在其 `.venv` 安装命令，不依赖全局 Python 已有依赖。
+项目来源：[bmdy6/zhiyin 的 wechat-export/](https://github.com/bmdy6/zhiyin/tree/main/wechat-export)。先定位已克隆项目中的 `wechat-export/` 并读该目录的 `README.md`；只有单独安装的 Skill 时，可先克隆项目，再按 README 在其 `.venv` 安装命令，不依赖全局 Python 已有依赖。
 
 需要从头执行或交接这套流程时，读取 [完整更新流程](references/workflow.md)，其中包括输入检查、离线导出、保留结构写回、分组补充、完成验收及回滚。
 

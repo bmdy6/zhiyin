@@ -36,8 +36,8 @@
 首次使用先克隆项目：
 
 ```sh
-git clone https://github.com/bmdy6/wechat-mac-export.git
-cd wechat-mac-export
+git clone https://github.com/bmdy6/zhiyin.git
+cd zhiyin/wechat-export
 ```
 
 在仓库根目录安装。环境及依赖准备好后，复制、验证和导出全程离线。

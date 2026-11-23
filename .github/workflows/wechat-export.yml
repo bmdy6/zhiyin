@@ -1,0 +1,22 @@
+name: WeChat exporter
+on:
+  push:
+    paths: ['wechat-export/**', '.github/workflows/wechat-export.yml']
+  pull_request:
+    paths: ['wechat-export/**', '.github/workflows/wechat-export.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: wechat-export
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python3 -m pip install .
+      - run: python3 -m unittest discover -s tests -v
+      - run: wechat-mac-export --help
