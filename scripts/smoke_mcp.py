@@ -11,6 +11,7 @@ import numpy as np
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
+from scripts.smoke_context import run as run_context
 from zhiyin.retrieval import ROOT, sha256
 
 
@@ -38,13 +39,17 @@ async def run() -> dict:
             "list_stages",
             "contact_brief",
             "suggest_relationships",
-            "set_relationship",
             "search_my_replies",
-            "draft_reply",
+            "list_chats",
+            "chat_stats",
+            "search_messages",
+            "read_window",
+            "find_moments",
+            "reply_context",
         }
         for tool in tools:
-            assert tool.annotations.readOnlyHint is (tool.name != "set_relationship")
-            assert tool.annotations.openWorldHint is (tool.name == "draft_reply")
+            assert tool.annotations.readOnlyHint is True
+            assert tool.annotations.openWorldHint is False
         stages = await session.call_tool("list_stages", {})
         assert not stages.isError
         assert sum(r["count"] for r in stages.structuredContent["result"]) == 788
@@ -71,7 +76,9 @@ async def run() -> dict:
         assert invalid.isError
         unknown = await session.call_tool("missing_tool", {})
         assert unknown.isError
+    context_smoke = await run_context()
     return {
+        "context": context_smoke,
         "transport": "stdio",
         "entrypoint": "zhiyin-mcp",
         "tools": sorted(t.name for t in tools),

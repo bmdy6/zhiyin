@@ -6,7 +6,15 @@ from pathlib import Path
 import numpy as np
 from rank_bm25 import BM25Okapi
 
-from zhiyin.retrieval import MODEL, ROOT, hybrid_rank, load_encoder, normalized, tokenize
+from zhiyin.retrieval import (
+    MODEL,
+    ROOT,
+    hybrid_rank,
+    load_encoder,
+    normalized,
+    tokenize,
+    tokenize_readonly,
+)
 from zhiyin.tone import profile_revision
 from zhiyin.wechat import WeChatStore, local_time
 
@@ -117,6 +125,51 @@ class ReplySearch:
         with self.store.connect(write=True) as db:
             self._load(db)
             return len(self.docs)
+
+    def search_readonly(self, db, message, matched=None, k=5, allowed=None):
+        """Use existing reply pairs without embeddings, model loading or cache writes."""
+        if not message.strip() or len(message) > 10000 or not 1 <= k <= 50:
+            raise ValueError("历史检索参数无效")
+        tokens = set(tokenize_readonly(message[:TEXT_LIMIT])) - COMMON
+        if not tokens:
+            return []
+        rows = []
+        seen = set()
+        for raw in db.execute(LATEST_FIRST, (VECTOR_VERSION,)):
+            row = dict(raw)
+            if allowed is not None and row["contact_id"] not in allowed:
+                continue
+            # One result per prior incoming message, same as hybrid retrieval.
+            if row["prior_id"] in seen:
+                continue
+            seen.add(row["prior_id"])
+            words = set(tokenize_readonly(row["her"][:TEXT_LIMIT])) - COMMON
+            overlap = len(tokens & words)
+            exact = row["her"].strip() == message.strip()
+            if not overlap and not exact:
+                continue
+            tier = 2
+            if matched is not None:
+                if row["contact_id"] == matched["id"]:
+                    tier = 0
+                elif (
+                    matched["relationship"] != "未分类"
+                    and row["relationship"] == matched["relationship"]
+                ):
+                    tier = 1
+            score = 1.0 if exact else overlap / max(len(tokens | words), 1)
+            rows.append((tier, -score, -row["time"], row))
+        return [
+            {
+                "contact_id": r["contact_id"],
+                "date": local_time(r["time"])[:10],
+                "her": r["her"],
+                "reply": r["reply"],
+                "score": -score,
+                "retrieval": "local lexical overlap",
+            }
+            for _, score, _, r in sorted(rows, key=lambda item: item[:3])[:k]
+        ]
 
     def search(self, message: str, contact: str | None = None, k: int = 5) -> list[dict]:
         if not isinstance(message, str) or not message.strip() or len(message) > 10000:

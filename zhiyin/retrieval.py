@@ -33,6 +33,15 @@ def tokenize(text: str) -> list[str]:
     return [t.lower() for t in JIEBA.cut(text) if re.search(r"[\w]", t)]
 
 
+def tokenize_readonly(text: str) -> list[str]:
+    """Initialize the existing jieba dictionary in memory without its disk cache."""
+    with JIEBA.lock:
+        if not JIEBA.initialized:
+            JIEBA.FREQ, JIEBA.total = JIEBA.gen_pfdict(JIEBA.get_dict_file())
+            JIEBA.initialized = True
+    return tokenize(text)
+
+
 def load_encoder(cache_dir: Path, *, offline: bool = True):
     try:
         return TextEmbedding(

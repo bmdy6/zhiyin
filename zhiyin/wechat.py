@@ -12,6 +12,8 @@ from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
+from zhiyin.context_metadata import PROBLEMS, import_metadata, initialize_context_config
+from zhiyin.context_metadata import SCHEMA as CONTEXT_SCHEMA
 from zhiyin.local import PrivateFiles
 
 EXPORT = Path.home() / "Documents/knowledge-mcp/private/微信聊天"
@@ -119,7 +121,7 @@ class WeChatStore(PrivateFiles):
         try:
             db.execute("PRAGMA foreign_keys = ON")
             if not readonly:
-                db.executescript(SCHEMA)
+                db.executescript(SCHEMA + CONTEXT_SCHEMA)
             db.executescript(VISIBLE)
             excluded, relations = self.config()
             db.executemany("INSERT INTO excluded VALUES (?)", [(value,) for value in excluded])
@@ -145,9 +147,9 @@ class WeChatStore(PrivateFiles):
 
 def source_messages(path: Path):
     with path.open(encoding="utf-8") as handle:
-        for line in handle:
+        for number, line in enumerate(handle, 1):
             if line.strip():
-                yield json.loads(line)
+                yield {**json.loads(line), "_source_line": number}
 
 
 def conversation_sources(root: Path):
@@ -181,7 +183,7 @@ def message_row(contact_id: str, raw: dict, positions: Counter, repeats: Counter
     timestamp = time.timestamp()
     sender, kind, subtype, text = (raw[key] for key in ("sender", "type", "subtype", "text"))
     if (
-        sender not in {"me", "them"}
+        (sender not in {"me", "them"} and not (sender == "unknown" and kind in {10000, 10002}))
         or type(kind) is not int
         or (subtype is not None and type(subtype) is not int)
         or not isinstance(text, str)
@@ -220,15 +222,22 @@ def import_wechat(store: WeChatStore, source: Path = EXPORT) -> dict[str, int]:
                 contact,
             )
             positions, repeats = Counter(), Counter()
-            rows = [
-                message_row(contact[0], raw, positions, repeats) for raw in source_messages(path)
-            ]
+            raw_rows = list(source_messages(path))
+            rows = [message_row(contact[0], raw, positions, repeats) for raw in raw_rows]
             scanned += len(rows)
             added += db.executemany(
                 "INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
                 "ON CONFLICT(id) DO NOTHING",
                 rows,
             ).rowcount
+            db.executemany(
+                "INSERT OR REPLACE INTO source_lines VALUES (?, ?)",
+                [(row[0], raw["_source_line"]) for row, raw in zip(rows, raw_rows, strict=True)],
+            )
+        import_metadata(db, source)
+        initialize_context_config(store)
+        if not store._path("我的问题.md").exists():
+            store._write("我的问题.md", PROBLEMS)
         contacts = db.execute("SELECT count(*) FROM visible_contacts").fetchone()[0]
         messages = db.execute(
             "SELECT count(*) FROM messages WHERE contact_id IN (SELECT id FROM visible_contacts)"

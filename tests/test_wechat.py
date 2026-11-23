@@ -338,3 +338,18 @@ def test_set_relationship_only_targets_the_resolved_id(tmp_path):
     with store.connect() as db:
         assert store.contact(db, "synthetic-1")["relationship"] == "其他"
         assert store.contact(db, "synthetic-2")["relationship"] == "未分类"
+
+
+def test_export_unknown_direction_is_only_allowed_for_system_messages(tmp_path):
+    from zhiyin.context import ChatContext
+
+    root = tmp_path / "export"
+    store = WeChatStore(tmp_path / "state")
+    export(root, {"合成": [msg(0, "unknown", "合成系统提示", 10000), msg(1, "me", "合成文本")]})
+    stats = import_wechat(store, root)
+    assert stats["messages"] == 2
+    assert ChatContext(store).chat_stats()["messages"] == 1
+    assert ChatContext(store).read_window("C1", line=2)["messages"][0]["line"] == 2
+    export(root, {"合成": [msg(0, "unknown", "合成普通文本")]})
+    with pytest.raises(ValueError):
+        import_wechat(store, root)

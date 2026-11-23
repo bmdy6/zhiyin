@@ -72,3 +72,45 @@ def test_network_guard_detects_swallowed_attempt():
         else:
             raise AssertionError('Swallowed network attempt was missed')
     """)
+
+
+def test_all_context_tools_are_offline_readonly_in_a_fresh_process():
+    run_child("""
+        import asyncio
+        import json
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from zhiyin.server import create_server
+        from zhiyin.wechat import WeChatStore, import_wechat
+        from scripts.offline import deny_network
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'export'
+            source.mkdir()
+            (source / 'C1').mkdir()
+            (source / '导出清单.json').write_text(json.dumps({'conversations': [{
+                'label':'合成联系人','conversation_id':'synthetic-1','code':'C1','folder':'C1',
+                'groups':['朋友']}]}))
+            rows = [dict(time=f'2026-01-01T09:0{i}:00+08:00', sender='them' if i == 0 else 'me',
+                type=1, subtype=None, text='我难过，别烦我' if i == 0 else '我也在合成测试') for i in range(7)]
+            (source / 'C1/chat.jsonl').write_text(''.join(json.dumps(r)+'\\n' for r in rows))
+            store = WeChatStore(root / 'state')
+            import_wechat(store, source)
+            before = {p.name:p.read_bytes() for p in store.root.iterdir()}
+            async def check():
+                with deny_network() as attempts:
+                    server = create_server(store=store, model_cache=root / 'missing-models')
+                    for name, args in [
+                        ('list_chats',{}), ('chat_stats',{}),
+                        ('search_messages',{'query':'难过'}),
+                        ('read_window',{'chat':'C1','line':1}),
+                        ('reply_context',{'chat':'C1','message':'我难过'}),
+                        *[('find_moments',{'kind':k}) for k in
+                          ['emotion_bid','burst','unanswered_end','self_pivot','conflict']],
+                    ]:
+                        result = await server.call_tool(name,args)
+                        assert result
+                assert attempts == []
+            asyncio.run(check())
+            assert {p.name:p.read_bytes() for p in store.root.iterdir()} == before
+    """)

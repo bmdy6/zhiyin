@@ -1,15 +1,39 @@
 {
+  "context": {
+    "transport": "stdio",
+    "calls": 10,
+    "tools": [
+      "chat_stats",
+      "find_moments",
+      "list_chats",
+      "read_window",
+      "reply_context",
+      "search_messages"
+    ],
+    "candidate_kinds": 5,
+    "readonly": true,
+    "synthetic": true
+  },
   "transport": "stdio",
-  "entrypoint": "chat-twin-mcp",
+  "entrypoint": "zhiyin-mcp",
   "tools": [
+    "chat_stats",
+    "contact_brief",
+    "find_moments",
+    "list_chats",
     "list_stages",
-    "search_samples"
+    "read_window",
+    "reply_context",
+    "search_messages",
+    "search_my_replies",
+    "search_samples",
+    "suggest_relationships"
   ],
   "queries": 50,
   "hits_at_5": 42,
   "recall_at_5": 0.84,
-  "p95_ms": 3.8599730999999986,
-  "max_ms": 4.164666,
+  "p95_ms": 5.00746005,
+  "max_ms": 6.331834,
   "excluded": "initialize/model load and warm-up call",
   "eval_sha256": "eab839f57afa36186fd1e096136bc3dc8e7a725a53ce1695eee19c9f4e2d91e7",
   "checks": [

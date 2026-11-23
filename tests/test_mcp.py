@@ -31,6 +31,7 @@ def test_stdio_wechat_tools_use_only_synthetic_inputs(tmp_path):
     root = tmp_path / "export"
     export(root, {"合成甲": [msg(0, "them", "绿茶泡好了"), msg(1, "me", "闻起来真香")]})
     import_wechat(WeChatStore(state), root)
+    (state / "config.toml").write_text("enable_draft_reply = true\n")
 
     async def check():
         params = StdioServerParameters(
@@ -55,7 +56,8 @@ def test_stdio_wechat_tools_use_only_synthetic_inputs(tmp_path):
             assert ready.serverInfo.name == "zhiyin"
             brief = await session.call_tool("contact_brief", {"contact": "C1"})
             assert not brief.isError
-            assert brief.structuredContent["contact"] == "合成甲"
+            assert brief.structuredContent["chat"] == "C1"
+            assert "合成甲" not in str(brief.structuredContent)
             matches = await session.call_tool(
                 "search_my_replies", {"message": "绿茶泡好了", "contact": "C1"}
             )
@@ -92,6 +94,7 @@ def test_stdio_relationship_tools_use_only_synthetic_inputs(tmp_path):
     export(root, {"合成同事": [msg(0, "me", "合成排期")]})
     import_wechat(WeChatStore(state), root)
     config = state / "config.toml"
+    config.write_text("enable_relationship_writes = true\n")
     before = config.read_bytes()
 
     async def check():
@@ -129,3 +132,52 @@ def test_stdio_relationship_tools_use_only_synthetic_inputs(tmp_path):
         capture_output=True,
     )
     assert "合成排期" in (state / PROFILE).read_text().split("## 同事\n")[1].split("\n## ")[0]
+
+
+def test_stdio_agent_context_tools(context_store):
+    import sys
+    import tempfile
+
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+
+    _, store = context_store
+
+    async def check():
+        params = StdioServerParameters(
+            command=sys.executable,
+            args=["-m", "zhiyin.server", "--state-dir", str(store.root)],
+            env={"TMPDIR": tempfile.gettempdir()},
+        )
+        async with (
+            stdio_client(params) as (reader, writer),
+            ClientSession(reader, writer) as session,
+        ):
+            await session.initialize()
+            tools = {t.name: t for t in (await session.list_tools()).tools}
+            assert "draft_reply" not in tools and "set_relationship" not in tools
+            for name, arguments in [
+                ("list_chats", {}),
+                ("chat_stats", {}),
+                ("search_messages", {"query": "难过", "sender": "them"}),
+                ("read_window", {"chat": "C1", "line": 1}),
+                ("reply_context", {"chat": "C1", "message": "合成甲今天很难过"}),
+                *[
+                    ("find_moments", {"kind": kind, "chat": "C1"})
+                    for kind in ["emotion_bid", "burst", "unanswered_end", "self_pivot", "conflict"]
+                ],
+            ]:
+                assert tools[name].annotations.readOnlyHint
+                result = await session.call_tool(name, arguments)
+                assert not result.isError
+                assert "合成甲" not in str(result.structuredContent)
+                assert "合成乙" not in str(result.structuredContent)
+            revealed = await session.call_tool("list_chats", {"reveal_names": True})
+            assert "合成甲" in str(revealed.structuredContent)
+            for arguments in [{"chat": "C1"}, {"chat": "C1", "line": 1, "time": "2026-01-01"}]:
+                invalid = await session.call_tool("read_window", arguments)
+                assert invalid.isError
+            invalid = await session.call_tool("find_moments", {"kind": "合成私密哨兵"})
+            assert invalid.isError and "合成私密哨兵" not in str(invalid.content)
+
+    asyncio.run(check())
