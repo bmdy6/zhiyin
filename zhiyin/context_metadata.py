@@ -85,6 +85,8 @@ def initialize_context_config(store):
     before = document.as_string()
     document.setdefault("enable_draft_reply", False)
     document.setdefault("enable_relationship_writes", False)
+    document.setdefault("enable_public_samples", False)
+    document.setdefault("contact_notes", tomlkit.table())
     rules = document.setdefault("context", tomlkit.table())
     for key, value in DEFAULTS.items():
         rules.setdefault(key, value)

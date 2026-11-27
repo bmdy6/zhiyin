@@ -19,6 +19,8 @@ uv run --locked --offline zhiyin tone_profile
 - `tone_profile` 生成 `~/.zhiyin/口吻.md`，统计发出的有效消息、文本长度、单条与连发、标点、语气词、表情和常用词，并按关系保留短句例子。终端只显示统计。口吻文件可在导入新数据或修改关系分组后重建。
 - 存储目录 `~/.zhiyin/` 的权限为 0700，生成文件为 0600。首次使用时从存在的 `~/.chat-twin/` 复制旧文件，保留原目录，已有目标文件优先。旧命令 `chat-twin` 和 `chat-twin-mcp` 仍可调用，会在 stderr 提示更名。
 
+设置非空环境变量 `ZHIYIN_STATE_DIR=/absolute/private/state` 可以让导入命令和 MCP 共享另一份私有状态。支持 `~` 展开，显式传入的测试 `--state-dir` 优先。使用环境变量时不触发旧目录迁移，权限和全路径符号链接拒绝规则保持不变。MCP 客户端需要在服务的 `env` 配置中设置同名变量并重启服务。
+
 ### 排除与关系组
 
 在 `~/.zhiyin/config.toml` 修改配置，下面的键都是合成示例。会话 ID 和代号可避免同名联系人混淆。
@@ -32,6 +34,20 @@ exclude_contacts = ["示例会话-A"]
 ```
 
 可以设置 `家人`、`朋友`、`同事`、`办事`、`其他`。配置按会话 ID、代号、备注的顺序匹配。没有配置时沿用导出的分组，导出没有分组时归为 `未分类`。旧分组 `陌生人或办事` 按 `办事` 读取。工具查询即时应用排除名单，再次导入时从消息和向量索引清理被排除的会话。草稿使用与当前可见消息和关系分组匹配的口吻统计。
+
+### 私有联系人画像
+
+`contact_brief` 和 `reply_context` 可返回可选的 `profile`，没有画像时省略。只读加载 `[contact_notes]`，按会话 ID、非撞名代号、非撞名备注匹配；画像目录默认是状态目录下的 `profiles/`，可以用顶层 `profiles_dir` 或 `[context].profiles_dir` 指定（顶层优先）。示例均为合成配置：
+
+```toml
+profiles_dir = "/absolute/private/profiles"
+enable_public_samples = false
+
+[contact_notes]
+"示例会话-B" = "只做日常分享的朋友，避免暧昧玩笑"
+```
+
+文件按 `<id>.md`、`<code>.md`、唯一的 `<code>-*.md` 顺序选一个，撞名的代号不用于匹配。拒绝画像路径上的符号链接。备注与文件合并后截断至 8000 字符并脱敏；`contact_brief` 固定隐藏已知真名，`reply_context(reveal_names=true)` 可以保留已知真名，联系方式仍脱敏。工具不写画像、不联网，关系边界由本人维护；未知姓名仍需自行检查。
 
 ## 查看近况、检索、起草
 
@@ -58,7 +74,7 @@ tool_timeout_sec = 240
 - `set_relationship(contact, relationship)`（仅显式开启 `enable_relationship_writes = true` 时注册） 在本人确认后保存一个联系人的分组。接受会话 ID、代号或唯一备注，写入时使用会话 ID。保存后检索即刻按新分组排序。运行 `uv run --locked --offline zhiyin tone_profile` 刷新本地口吻文件。
 - `search_my_replies(message, contact=None, k=5)` 检索「对方说过什么 → 我当时怎么回」，附日期。相似结果按同一联系人、同类已知关系、其他联系人排序。MCP 使用 jieba 词法重合度检索，不加载向量模型、不写缓存；没有有效重合时返回空结果。原 CLI 的混合向量检索仍保留。
 - `draft_reply(contact, message, goal=None)`（默认不注册，仅显式开启 `enable_draft_reply = true` 时注册） 对已导入的联系人起草 1–3 条可独立使用的回复，每条附参考编号和对应的复盘规则。找不到相似个人回复时才使用公开样本。身份、钱、见面、严重负面情绪和需要本人承诺的消息交回本人。六条规则经过语义自检，首次失败可重写一次。
-- 公开辅助工具 `search_samples` 和 `list_stages` 沿用第 2 轮的行为。公开索引默认读取仓库的 `data/index/`，wheel 安装时请用 `--index-dir`、`--model-cache` 指定对应绝对路径。
+- 公开辅助工具 `search_samples` 和 `list_stages` 默认不注册，仅在 `config.toml` 顶层设置 `enable_public_samples = true` 后开启，沿用第 2 轮的检索行为。公开索引默认读取仓库的 `data/index/`，wheel 安装时请用 `--index-dir`、`--model-cache` 指定对应绝对路径。
 
 CLI 也提供近况、检索和草稿入口。带原文的结果只在你主动调用时返回；用输入文件可以在命令行提供对话上下文。
 

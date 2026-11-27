@@ -17,65 +17,72 @@ from zhiyin.retrieval import ROOT, sha256
 
 async def run() -> dict:
     queries = [json.loads(s) for s in (ROOT / "evals/retrieval.jsonl").read_text().splitlines()]
-    # Explicit absolute resource paths also exercise the wheel-install use case.
-    params = StdioServerParameters(
-        command=str(Path(sys.executable).parent / "zhiyin-mcp"),
-        args=[
-            "--index-dir",
-            str(ROOT / "data/index"),
-            "--model-cache",
-            str(ROOT / "data/cache/models"),
-        ],
-        cwd=tempfile.gettempdir(),
-    )
-    async with (
-        stdio_client(params) as (reader, writer),
-        ClientSession(reader, writer) as session,
-    ):
-        await session.initialize()
-        tools = (await session.list_tools()).tools
-        assert {tool.name for tool in tools} == {
-            "search_samples",
-            "list_stages",
-            "contact_brief",
-            "suggest_relationships",
-            "search_my_replies",
-            "list_chats",
-            "chat_stats",
-            "search_messages",
-            "read_window",
-            "find_moments",
-            "reply_context",
-        }
-        for tool in tools:
-            assert tool.annotations.readOnlyHint is True
-            assert tool.annotations.openWorldHint is False
-        stages = await session.call_tool("list_stages", {})
-        assert not stages.isError
-        assert sum(r["count"] for r in stages.structuredContent["result"]) == 788
-        warmup = await session.call_tool("search_samples", {"message": "今天心情很好"})
-        assert not warmup.isError
-        times = []
-        hits = 0
-        for case in queries:
-            start = time.perf_counter_ns()
-            response = await session.call_tool("search_samples", {"message": case["query"]})
-            times.append((time.perf_counter_ns() - start) / 1e6)
-            assert not response.isError
-            rows = response.structuredContent["result"]
-            assert all(
-                set(r) == {"id", "stage", "context", "her", "reply", "goal", "score"} for r in rows
-            )
-            hits += case["expected_id"] in [r["id"] for r in rows]
-        filtered = await session.call_tool(
-            "search_samples", {"message": "见面聊聊", "stage": 1, "scene": "offline"}
+    with tempfile.TemporaryDirectory(prefix="zhiyin-public-smoke-") as directory:
+        state = Path(directory)
+        (state / "config.toml").write_text("enable_public_samples = true\n", encoding="utf-8")
+        # Explicit absolute resource paths also exercise the wheel-install use case.
+        params = StdioServerParameters(
+            command=str(Path(sys.executable).parent / "zhiyin-mcp"),
+            args=[
+                "--state-dir",
+                str(state),
+                "--index-dir",
+                str(ROOT / "data/index"),
+                "--model-cache",
+                str(ROOT / "data/cache/models"),
+            ],
+            cwd=tempfile.gettempdir(),
+            env={"TMPDIR": tempfile.gettempdir()},
         )
-        assert not filtered.isError
-        assert all(r["stage"] in {1, 2} for r in filtered.structuredContent["result"])
-        invalid = await session.call_tool("search_samples", {"message": "你好", "stage": 8})
-        assert invalid.isError
-        unknown = await session.call_tool("missing_tool", {})
-        assert unknown.isError
+        async with (
+            stdio_client(params) as (reader, writer),
+            ClientSession(reader, writer) as session,
+        ):
+            await session.initialize()
+            tools = (await session.list_tools()).tools
+            assert {tool.name for tool in tools} == {
+                "search_samples",
+                "list_stages",
+                "contact_brief",
+                "suggest_relationships",
+                "search_my_replies",
+                "list_chats",
+                "chat_stats",
+                "search_messages",
+                "read_window",
+                "find_moments",
+                "reply_context",
+            }
+            for tool in tools:
+                assert tool.annotations.readOnlyHint is True
+                assert tool.annotations.openWorldHint is False
+            stages = await session.call_tool("list_stages", {})
+            assert not stages.isError
+            assert sum(r["count"] for r in stages.structuredContent["result"]) == 788
+            warmup = await session.call_tool("search_samples", {"message": "今天心情很好"})
+            assert not warmup.isError
+            times = []
+            hits = 0
+            for case in queries:
+                start = time.perf_counter_ns()
+                response = await session.call_tool("search_samples", {"message": case["query"]})
+                times.append((time.perf_counter_ns() - start) / 1e6)
+                assert not response.isError
+                rows = response.structuredContent["result"]
+                assert all(
+                    set(r) == {"id", "stage", "context", "her", "reply", "goal", "score"}
+                    for r in rows
+                )
+                hits += case["expected_id"] in [r["id"] for r in rows]
+            filtered = await session.call_tool(
+                "search_samples", {"message": "见面聊聊", "stage": 1, "scene": "offline"}
+            )
+            assert not filtered.isError
+            assert all(r["stage"] in {1, 2} for r in filtered.structuredContent["result"])
+            invalid = await session.call_tool("search_samples", {"message": "你好", "stage": 8})
+            assert invalid.isError
+            unknown = await session.call_tool("missing_tool", {})
+            assert unknown.isError
     context_smoke = await run_context()
     return {
         "context": context_smoke,
