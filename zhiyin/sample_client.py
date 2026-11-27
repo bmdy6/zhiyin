@@ -1,6 +1,7 @@
 """Official MCP stdio client for the round-2 server, reused for all drafts in a run."""
 
 import sys
+import tempfile
 from contextlib import AsyncExitStack
 from datetime import timedelta
 from pathlib import Path
@@ -25,11 +26,18 @@ class SampleClient:
 
     async def _connect(self):
         # Lazy initialization: sensitive input can hand off without loading any retrieval resources.
+        state = Path(
+            self.stack.enter_context(tempfile.TemporaryDirectory(prefix="zhiyin-samples-"))
+        )
+        (state / "config.toml").write_text("enable_public_samples = true\n", encoding="utf-8")
         params = StdioServerParameters(
             command=sys.executable,
+            env={"TMPDIR": tempfile.gettempdir()},
             args=[
                 "-m",
                 "zhiyin.server",
+                "--state-dir",
+                str(state),
                 "--index-dir",
                 str(self.index_dir.resolve()),
                 "--model-cache",

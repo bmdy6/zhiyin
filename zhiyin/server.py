@@ -43,6 +43,7 @@ def create_server(
     model=None,
     enable_draft_reply: bool | None = None,
     enable_relationship_writes: bool | None = None,
+    enable_public_samples: bool | None = None,
 ) -> FastMCP:
     store = store if store is not None else WeChatStore()
     context = ChatContext(store)
@@ -58,7 +59,15 @@ def create_server(
         if enable_relationship_writes is None
         else enable_relationship_writes
     )
-    if type(enable_draft_reply) is not bool or type(enable_relationship_writes) is not bool:
+    enable_public_samples = (
+        config.get("enable_public_samples", False)
+        if enable_public_samples is None
+        else enable_public_samples
+    )
+    if any(
+        type(flag) is not bool
+        for flag in (enable_draft_reply, enable_relationship_writes, enable_public_samples)
+    ):
         raise ValueError("MCP注册开关须为布尔值")
     replies = ReplySearch(store, model_cache, encoder=retriever.encoder if retriever else None)
 
@@ -151,6 +160,9 @@ def create_server(
         return (await engine.run_wechat(contact, message, goal=goal)).as_tool_result()
 
     register_context_tools(server, context)
+    if not enable_public_samples:
+        server.remove_tool("search_samples")
+        server.remove_tool("list_stages")
     if not enable_draft_reply:
         server.remove_tool("draft_reply")
     if not enable_relationship_writes:

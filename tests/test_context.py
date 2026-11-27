@@ -326,3 +326,137 @@ def test_import_initializes_rule_config_without_overwriting_customizations(conte
     assert ctx.settings()["emotion_words"] == ["合成情绪"]
     assert "# 合成保留注释" in config.read_text()
     assert store._path("我的问题.md").read_text() == "合成手改问题"
+
+
+def test_environment_state_is_private_and_skips_legacy(tmp_path, monkeypatch):
+    from zhiyin.local import PrivateFiles
+
+    home = tmp_path / "home"
+    home.mkdir()
+    legacy = home / ".chat-twin"
+    legacy.mkdir()
+    (legacy / "sentinel").write_text("synthetic")
+    monkeypatch.setattr("pathlib.Path.home", lambda: home)
+    monkeypatch.setenv("ZHIYIN_STATE_DIR", str(tmp_path / "selected"))
+    store = PrivateFiles()
+    with store._locked():
+        store._write("config.toml", "")
+    assert store.root == tmp_path / "selected"
+    assert store.legacy is None
+    assert not (store.root / "sentinel").exists()
+    assert not (home / ".zhiyin").exists()
+    assert store.root.stat().st_mode & 0o777 == 0o700
+    assert (store.root / "config.toml").stat().st_mode & 0o777 == 0o600
+    assert PrivateFiles(tmp_path / "explicit").root == tmp_path / "explicit"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("ZHIYIN_STATE_DIR", "~/expanded")
+    assert PrivateFiles().root == home / "expanded"
+    monkeypatch.setenv("ZHIYIN_STATE_DIR", "")
+    assert PrivateFiles().root == home / ".zhiyin"
+
+
+def test_profiles_merge_redact_and_remain_readonly(context_store, tmp_path):
+    ctx, store = context_store
+    profiles = tmp_path / "profiles"
+    profiles.mkdir()
+    (profiles / "C1-synthetic.md").write_text("合成甲与合成乙只做朋友 13800138000")
+    (store.root / "config.toml").write_text(
+        f'profiles_dir = "{profiles}"\n[contact_notes]\n"synthetic-1" = "ID边界"\nC1 = "代号边界"\n'
+    )
+    before = {
+        p: p.read_bytes() for root in (profiles, store.root) for p in root.rglob("*") if p.is_file()
+    }
+    for result in (ctx.contact_brief("C1"), ctx.reply_context("C1", "合成消息")):
+        assert result["profile"] == "ID边界\n\nC1与C2只做朋友 [隐私]"
+    assert "合成甲与合成乙" in ctx.reply_context("C1", "合成消息", True)["profile"]
+    assert "profile" not in ctx.contact_brief("C2")
+    assert before == {p: p.read_bytes() for p in before}
+    (profiles / "C1.md").write_text("精确代号")
+    assert ctx.contact_brief("C1")["profile"] == "ID边界\n\n精确代号"
+    (profiles / "synthetic-1.md").write_text("精确ID")
+    assert ctx.contact_brief("C1")["profile"] == "ID边界\n\n精确ID"
+
+
+def test_profile_defaults_ambiguity_and_size(context_store):
+    import tomllib
+
+    ctx, store = context_store
+    config = store.root / "config.toml"
+    defaults = tomllib.loads(config.read_text())
+    assert defaults["enable_public_samples"] is False
+    assert defaults["contact_notes"] == {}
+    profiles = store.root / "profiles"
+    profiles.mkdir()
+    for suffix in ("one", "two"):
+        (profiles / f"C1-{suffix}.md").write_text("歧义")
+    assert "profile" not in ctx.contact_brief("C1")
+    config.write_text('[contact_notes]\nC1 = "代号"\n"合成乙" = "备注"\n')
+    assert ctx.contact_brief("C1")["profile"] == "代号"
+    assert ctx.reply_context("C2", "合成")["profile"] == "备注"
+    config.write_text('[context]\nprofiles_dir = "' + str(profiles) + '"\n')
+    (profiles / "synthetic-1.md").write_text("界" * 9000)
+    assert len(ctx.contact_brief("C1")["profile"]) == 8000
+
+
+@pytest.mark.parametrize("target", ["file", "directory", "ancestor"])
+def test_profile_symlinks_are_rejected(context_store, tmp_path, target):
+    ctx, store = context_store
+    real = tmp_path / "real"
+    real.mkdir()
+    (real / "C1.md").write_text("合成私密画像")
+    if target == "file":
+        profiles = store.root / "profiles"
+        profiles.mkdir()
+        (profiles / "C1.md").symlink_to(real / "C1.md")
+    else:
+        link = tmp_path / "link"
+        link.symlink_to(real, target_is_directory=True)
+        profiles = link if target == "directory" else link / "nested"
+        if target == "ancestor":
+            (real / "nested").mkdir()
+        (store.root / "config.toml").write_text(f'profiles_dir = "{profiles}"\n')
+    with pytest.raises(ValueError, match="符号链接"):
+        ctx.contact_brief("C1")
+
+
+def test_profile_aliases_cannot_take_another_contacts_id(context_store):
+    ctx, store = context_store
+    with store.connect(write=True) as db:
+        db.execute("INSERT INTO contacts VALUES (?, ?, ?, ?)", ("C1", "C9", "合成隔离", "朋友"))
+        db.execute("UPDATE contacts SET label='C1' WHERE code='C2'")
+    (store.root / "config.toml").write_text('[contact_notes]\nC1 = "仅ID所有者"\n')
+    profiles = store.root / "profiles"
+    profiles.mkdir()
+    (profiles / "C1.md").write_text("仅ID文件")
+    assert "profile" not in ctx.contact_brief("synthetic-1")
+    assert "profile" not in ctx.contact_brief("synthetic-2")
+    assert ctx.contact_brief("C1")["profile"] == "仅ID所有者\n\n仅ID文件"
+
+
+def test_environment_state_rejects_symlink_ancestors(tmp_path, monkeypatch):
+    from zhiyin.local import PrivateFiles
+
+    real = tmp_path / "real"
+    real.mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(real, target_is_directory=True)
+    monkeypatch.setenv("ZHIYIN_STATE_DIR", str(link / "state"))
+    with pytest.raises(ValueError, match="符号链接"), PrivateFiles()._locked():
+        pytest.fail("must not acquire a lock through a symlink")
+    assert list(real.iterdir()) == []
+
+
+def test_profile_duplicate_labels_and_path_components_are_isolated(context_store, tmp_path):
+    ctx, store = context_store
+    with store.connect(write=True) as db:
+        db.execute("UPDATE contacts SET label='重复合成备注' WHERE code IN ('C1', 'C2')")
+    (store.root / "config.toml").write_text('[contact_notes]\n"重复合成备注" = "不可共享"\n')
+    assert "profile" not in ctx.contact_brief("C1")
+    assert "profile" not in ctx.contact_brief("C2")
+    profiles = store.root / "profiles"
+    profiles.mkdir()
+    outside = store.root / "outside.md"
+    outside.write_text("不可越界")
+    with store.connect(write=True) as db:
+        db.execute("UPDATE contacts SET code='../outside' WHERE id='synthetic-1'")
+    assert "profile" not in ctx.contact_brief("synthetic-1")

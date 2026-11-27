@@ -22,8 +22,15 @@ def temporary_state(value: str) -> Path:
 
 class PrivateFiles:
     def __init__(self, root: Path | None = None):
-        self.root = (root if root is not None else Path.home() / ".zhiyin").absolute()
-        self.legacy = Path.home() / ".chat-twin" if root is None else None
+        env_root = os.environ.get("ZHIYIN_STATE_DIR") if root is None else None
+        self.root = (
+            root
+            if root is not None
+            else Path(env_root).expanduser()
+            if env_root
+            else Path.home() / ".zhiyin"
+        ).absolute()
+        self.legacy = Path.home() / ".chat-twin" if root is None and not env_root else None
 
     def _path(self, relative: str | Path) -> Path:
         path = self.root / relative

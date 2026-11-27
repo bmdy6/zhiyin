@@ -9,12 +9,14 @@ from collections import defaultdict
 from contextlib import contextmanager
 from datetime import datetime
 from itertools import pairwise
+from pathlib import Path
 from statistics import mean, median
 from typing import Literal
 
 from zhiyin.context_metadata import PROBLEMS
 from zhiyin.context_privacy import Redactor
 from zhiyin.context_rules import DEFAULTS
+from zhiyin.local import PrivateFiles
 from zhiyin.wechat import CHAT_TIMEZONE, WeChatStore, local_time
 
 Kind = Literal["emotion_bid", "burst", "unanswered_end", "self_pivot", "conflict"]
@@ -100,6 +102,58 @@ def summarize(chats: list[list[dict]]) -> dict:
 class ChatContext:
     def __init__(self, store: WeChatStore):
         self.store = store
+
+    def profile(self, db, contact, redactor, reveal_names=False):
+        """Read one private profile and explicit notes without touching either source."""
+        path = self.store._path("config.toml")
+        config = tomllib.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        notes = config.get("contact_notes", {})
+        if not isinstance(notes, dict) or any(not isinstance(v, str) for v in notes.values()):
+            raise ValueError("contact_notes 须为字符串表")
+
+        def unambiguous(value):
+            owners = db.execute(
+                "SELECT id FROM contacts WHERE id=? OR code=? OR label=?",
+                (value, value, value),
+            ).fetchall()
+            return len(owners) == 1 and owners[0]["id"] == contact["id"]
+
+        keys = [contact["id"]]
+        keys.extend(contact[k] for k in ("code", "label") if unambiguous(contact[k]))
+        text = next((notes[key] for key in keys if key in notes), "")
+        configured = config.get("profiles_dir", config.get("context", {}).get("profiles_dir"))
+        root = (
+            Path(configured).expanduser().absolute() if configured else self.store._path("profiles")
+        )
+        files = PrivateFiles(root)
+        root = files._path(".")
+        if root.is_dir():
+            names = [contact["id"]]
+            code = contact["code"]
+            if unambiguous(code):
+                names.append(code)
+            selected = None
+            for name in names:
+                # IDs and aliases are data, never relative paths or glob expressions.
+                if not name or name in {".", ".."} or Path(name).name != name:
+                    continue
+                candidate = files._path(name + ".md")
+                if candidate.is_file():
+                    selected = candidate
+                    break
+            if selected is None and unambiguous(code) and Path(code).name == code:
+                matches = [
+                    p for p in root.iterdir() if p.name.startswith(code + "-") and p.suffix == ".md"
+                ]
+                for match in matches:
+                    files._path(match.name)
+                if len(matches) == 1 and matches[0].is_file():
+                    selected = matches[0]
+            if selected is not None:
+                with selected.open(encoding="utf-8") as handle:
+                    content = handle.read(8000)
+                text = "\n\n".join(part for part in (text, content) if part)
+        return redactor.text(text[:8000], reveal_names)[:8000]
 
     def settings(self):
         path = self.store._path("config.toml")
@@ -385,7 +439,11 @@ class ChatContext:
             brief = read_brief(db, c)
             brief["contact"] = c["code"]
             brief.update(self.identity(c, False))
-            return redactor.value(brief)
+            brief = redactor.value(brief)
+            profile = self.profile(db, c, redactor)
+            if profile:
+                brief["profile"] = profile
+            return brief
 
     def search_my_replies(self, message, contact=None, k=5, reveal_names=False):
         from zhiyin.my_replies import ReplySearch
@@ -415,9 +473,11 @@ class ChatContext:
         history = self.search_my_replies(message, chat, 5, reveal_names)
         path = self.store._path("我的问题.md")
         problems = path.read_text(encoding="utf-8")[:16000] if path.exists() else PROBLEMS
-        with self.snapshot(chat) as (_, _, _, redactor):
+        with self.snapshot(chat) as (db, contacts, _, redactor):
+            profile = self.profile(db, contacts[0], redactor, reveal_names) if contacts else ""
             return {
                 **brief,
+                **({"profile": profile} if profile else {}),
                 "summary": "本地历史记录；分组不代表关系判断",
                 "historical_replies": history,
                 "problems": redactor.text(problems, reveal_names),
