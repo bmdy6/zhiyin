@@ -29,12 +29,20 @@ PROBLEMS = """# 我的问题
 """
 
 
+def manifest_entry(entry: dict) -> dict:
+    """Give raw wechat-mac-export entries the code refresh_knowledge.py would assign."""
+    if "code" not in entry and type(entry.get("sequence")) is int:
+        return {**entry, "code": f"A{entry['sequence']}"}
+    return entry
+
+
 def import_metadata(db, source: Path):
     manifest = json.loads((source / "导出清单.json").read_text(encoding="utf-8"))
     groups = defaultdict(set)
     aliases = defaultdict(set)
     identifiers = set()
     for entry in manifest["conversations"]:
+        entry = manifest_entry(entry)
         groups[entry["code"]].update(entry.get("groups", []))
     index = source / "分组索引.json"
     if index.exists():

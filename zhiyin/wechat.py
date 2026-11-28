@@ -12,7 +12,12 @@ from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
-from zhiyin.context_metadata import PROBLEMS, import_metadata, initialize_context_config
+from zhiyin.context_metadata import (
+    PROBLEMS,
+    import_metadata,
+    initialize_context_config,
+    manifest_entry,
+)
 from zhiyin.context_metadata import SCHEMA as CONTEXT_SCHEMA
 from zhiyin.local import PrivateFiles
 
@@ -157,6 +162,7 @@ def conversation_sources(root: Path):
     if manifest.is_file():
         seen = set()
         for entry in json.loads(manifest.read_text(encoding="utf-8"))["conversations"]:
+            entry = manifest_entry(entry)
             contact_id, label, code = (
                 entry[key].strip() for key in ("conversation_id", "label", "code")
             )
