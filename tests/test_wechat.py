@@ -301,6 +301,35 @@ def test_suggest_relationships_leaves_config_and_index_untouched(tmp_path):
     assert {path.name: path.read_bytes() for path in store.root.iterdir()} == before
 
 
+def test_raw_wechat_mac_export_manifest_gets_sequence_codes(tmp_path):
+    root = tmp_path / "export"
+    store = WeChatStore(tmp_path / "state")
+    export(root, {"合成甲": [msg(0, "them", "合成问候")], "合成乙": []})
+    manifest_path = root / "导出清单.json"
+    manifest = json.loads(manifest_path.read_text())
+    for sequence, entry in enumerate(manifest["conversations"], start=1):
+        del entry["code"]
+        entry["sequence"] = sequence
+    manifest_path.write_text(json.dumps(manifest))
+    assert import_wechat(store, root)["inserted"] == 1
+    with store.connect() as db:
+        assert [row[0] for row in db.execute("SELECT code FROM contacts ORDER BY code")] == [
+            "A1",
+            "A2",
+        ]
+
+
+def test_manifest_without_code_or_sequence_is_rejected(tmp_path):
+    root = tmp_path / "export"
+    export(root, {"合成甲": []})
+    manifest_path = root / "导出清单.json"
+    manifest = json.loads(manifest_path.read_text())
+    del manifest["conversations"][0]["code"]
+    manifest_path.write_text(json.dumps(manifest))
+    with pytest.raises(KeyError):
+        import_wechat(WeChatStore(tmp_path / "state"), root)
+
+
 def test_legacy_relationships_work_without_reimport(tmp_path):
     root = tmp_path / "export"
     store = WeChatStore(tmp_path / "state")

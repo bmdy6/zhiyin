@@ -4,6 +4,8 @@
 
 ## 安装与导入
 
+**第 0 步：导出微信记录。** 知音不读微信数据库，也不碰密钥。先用 [wechat-mac-export](https://github.com/bmdy6/wechat-mac-export) 在本机导出（macOS 微信 4.2.0）。它的 `export` 输出目录可以直接交给 `import_wechat --source`；已经用它维护知识目录的，用默认路径即可。用别的工具导出时，按 [导出格式](docs/导出格式.md) 准备文件。
+
 需要 Python 3.11+ 和 uv。在仓库根目录执行：
 
 ```bash
