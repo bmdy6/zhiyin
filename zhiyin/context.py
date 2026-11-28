@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import tomllib
@@ -169,7 +170,9 @@ class ChatContext:
         return settings
 
     @contextmanager
-    def snapshot(self, chat=None):
+    def snapshot(self, chat=None, chat_type="private"):
+        if chat_type not in {"private", "group", "all"}:
+            raise ValueError("chat_type 须为 private、group 或 all")
         with self.store.read_existing() as db:
             if db is None:
                 yield None, [], {}, Redactor({})
@@ -182,22 +185,24 @@ class ChatContext:
                 raise ValueError("请先运行 import_wechat 更新本地来源索引")
             aliases = dict(db.execute("SELECT alias, code FROM private_aliases"))
             all_contacts = [
-                dict(r) for r in db.execute("SELECT * FROM visible_contacts ORDER BY code")
+                dict(r) for r in db.execute("SELECT * FROM all_visible_contacts ORDER BY code")
             ]
             metadata = dict(db.execute("SELECT contact_id, groups_json FROM chat_groups"))
             contacts = []
             for c in all_contacts:
                 c["groups"] = json.loads(metadata.get(c["id"], "[]")) or [c["relationship"]]
                 if (
-                    "@chatroom" in c["id"]
+                    (chat_type == "private" and c["is_group"])
+                    or (chat_type == "group" and not c["is_group"])
                     or c["relationship"] == "办事"
                     or any(re.search(r"商家|服务", g) for g in c["groups"])
                 ):
                     continue
                 contacts.append(c)
             if chat is not None:
-                matched = self.store.contact(db, chat)
-                contacts = [c for c in contacts if matched and c["id"] == matched["id"]]
+                exact = [c for c in contacts if c["id"] == chat.strip()]
+                matches = exact or [c for c in contacts if chat.strip() in (c["code"], c["label"])]
+                contacts = matches if len(matches) == 1 else []
             messages = defaultdict(list)
             selected = {c["id"] for c in contacts}
             # Preserve export order for same-second messages, not hash order.
@@ -208,6 +213,19 @@ class ChatContext:
                     if r["line"] is None:
                         raise ValueError("来源行号缺失，请重新导入完整快照")
                     messages[r["contact_id"]].append(dict(r))
+            if "message_members" in tables:
+                members = {r[0]: (r[1], r[2]) for r in db.execute("SELECT * FROM message_members")}
+                for c in contacts:
+                    if c["is_group"]:
+                        for row in messages[c["id"]]:
+                            member, name = members.get(row["id"], (None, None))
+                            row["member"] = (
+                                "M"
+                                + hashlib.sha256((c["id"] + ":" + member).encode()).hexdigest()[:12]
+                                if member
+                                else "unknown"
+                            )
+                            row["member_name"] = name if name and name != member else None
             identifiers = {r[0] for r in db.execute("SELECT alias FROM private_identifiers")}
             yield db, contacts, messages, Redactor(aliases, identifiers)
 
@@ -229,10 +247,18 @@ class ChatContext:
             "sender": row["sender"],
             "text": redactor.text(row["text"], reveal_names) if row["is_text"] else "[非文本消息]",
             "segment_start": segment_start,
+            **({"member": row["member"]} if "member" in row else {}),
+            **(
+                {"member_name": redactor.text(row["member_name"], True)}
+                if reveal_names and row.get("member_name")
+                else {}
+            ),
         }
 
-    def list_chats(self, group=None, active_days=None, min_messages=0, reveal_names=False):
-        with self.snapshot() as (_, contacts, messages, redactor):
+    def list_chats(
+        self, group=None, active_days=None, min_messages=0, reveal_names=False, chat_type="private"
+    ):
+        with self.snapshot(chat_type=chat_type) as (_, contacts, messages, redactor):
             anchor = max((r["time"] for rows in messages.values() for r in rows), default=0)
             result = []
             for c in contacts:
@@ -265,7 +291,15 @@ class ChatContext:
             return redactor.value(result, reveal_names)
 
     def search_messages(
-        self, query, chat=None, sender=None, since=None, until=None, limit=20, reveal_names=False
+        self,
+        query,
+        chat=None,
+        sender=None,
+        since=None,
+        until=None,
+        limit=20,
+        reveal_names=False,
+        chat_type="private",
     ):
         if not query.strip() or not 1 <= limit <= 100 or sender not in (None, "me", "them"):
             raise ValueError("搜索参数无效")
@@ -273,7 +307,7 @@ class ChatContext:
         upper = timestamp(until) if until else float("inf")
         if lower > upper:
             raise ValueError("时间范围无效")
-        with self.snapshot(chat) as (_, contacts, messages, redactor):
+        with self.snapshot(chat, chat_type) as (_, contacts, messages, redactor):
             hits = [
                 (r, c["code"])
                 for c in contacts
@@ -303,10 +337,19 @@ class ChatContext:
             if max(0, index - before) <= i <= index + after
         ]
 
-    def read_window(self, chat, line=None, time=None, before=15, after=15, reveal_names=False):
+    def read_window(
+        self,
+        chat,
+        line=None,
+        time=None,
+        before=15,
+        after=15,
+        reveal_names=False,
+        chat_type="private",
+    ):
         if (line is None) == (time is None) or not 0 <= before <= 100 or not 0 <= after <= 100:
             raise ValueError("须提供 line 或 time 之一；窗口须为0–100")
-        with self.snapshot(chat) as (_, contacts, messages, redactor):
+        with self.snapshot(chat, chat_type) as (_, contacts, messages, redactor):
             if not contacts or not messages[contacts[0]["id"]]:
                 return {"found": False, "messages": []}
             c = contacts[0]

@@ -1,5 +1,6 @@
 """Import private source references and identities; never expose these tables directly."""
 
+import hashlib
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -9,6 +10,10 @@ import tomlkit
 from zhiyin.context_rules import DEFAULTS
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS message_members (
+    message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+    sender_id TEXT, sender_name TEXT
+);
 CREATE TABLE IF NOT EXISTS source_lines (
     message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
     line INTEGER NOT NULL
@@ -31,18 +36,35 @@ PROBLEMS = """# 我的问题
 
 def manifest_entry(entry: dict) -> dict:
     """Give raw wechat-mac-export entries the code refresh_knowledge.py would assign."""
-    if "code" not in entry and type(entry.get("sequence")) is int:
-        return {**entry, "code": f"A{entry['sequence']}"}
+    if "code" not in entry:
+        is_group = entry.get("chat_type") == "group" or entry["conversation_id"].endswith(
+            "@chatroom"
+        )
+        if is_group:
+            code = "G" + hashlib.sha256(entry["conversation_id"].encode()).hexdigest()[:12].upper()
+        elif type(entry.get("sequence")) is int:
+            code = f"A{entry['sequence']}"
+        else:
+            return entry
+        return {**entry, "code": code}
     return entry
 
 
 def import_metadata(db, source: Path):
     manifest = json.loads((source / "导出清单.json").read_text(encoding="utf-8"))
+    manifest["conversations"] = [manifest_entry(entry) for entry in manifest["conversations"]]
     groups = defaultdict(set)
     aliases = defaultdict(set)
-    identifiers = set()
+    identifiers = {row[0] for row in db.execute("SELECT alias FROM private_identifiers")}
+    for alias, code in db.execute("SELECT alias, code FROM private_aliases"):
+        aliases[alias].add(code)
+    imported_codes = {entry.get("code") for entry in manifest["conversations"]}
+    for code, raw_groups in db.execute(
+        "SELECT c.code, g.groups_json FROM chat_groups g JOIN contacts c ON c.id=g.contact_id"
+    ):
+        if code not in imported_codes:
+            groups[code].update(json.loads(raw_groups))
     for entry in manifest["conversations"]:
-        entry = manifest_entry(entry)
         groups[entry["code"]].update(entry.get("groups", []))
     index = source / "分组索引.json"
     if index.exists():
@@ -72,6 +94,16 @@ def import_metadata(db, source: Path):
             "INSERT OR REPLACE INTO chat_groups VALUES (?, ?)",
             (contact["id"], json.dumps(sorted(groups[contact["code"]]), ensure_ascii=False)),
         )
+    for row in db.execute(
+        "SELECT m.contact_id, mm.sender_id, mm.sender_name FROM message_members mm JOIN messages m ON m.id=mm.message_id"
+    ):
+        cid, member, name = row
+        if member:
+            code = "M" + hashlib.sha256((cid + ":" + member).encode()).hexdigest()[:12]
+            identifiers.add(member)
+            aliases[member].add(code)
+            if name and name != member:
+                aliases[name].add(code)
     # Ambiguous names are masked rather than assigned to the wrong person.
     db.execute("DELETE FROM private_identifiers")
     db.executemany("INSERT INTO private_identifiers VALUES (?)", [(v,) for v in identifiers])

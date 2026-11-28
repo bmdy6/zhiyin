@@ -229,3 +229,11 @@ uv run python -m compileall -q scripts
 清洗脚本保留原入口。检索服务现已支持 wheel/sdist 构建；测试包含解析、两个阶段5、四类删除各至少2例、边界、去重、标签契约和离线/API失败路径。
 
 第1轮返工已随 PR #2 合并。第2轮开头按 Issue 当前状态修正两条遗留：`qs-c-3386` 去掉末尾「（坚持目送）」后保留；`qs-c-3044` 改判 vulgar。保留788条、删除649条，其余1435条不变。原始模型审计不改写，规则判定和 REPORT 已同步。
+
+### 按需读取群聊
+
+先用 wechat-mac-export 的 `export --group "群名或群 ID"` 导出群聊，再用 `zhiyin import_wechat --source <导出目录>` 增量导入。群消息只存本机索引，不进入私聊回复样本和关系分析。
+
+`list_chats`、`search_messages`、`read_window` 增加可选参数 `chat_type`：`private`（默认仅私聊）、`group`（仅群聊）、`all`（两类）。例如先调用 `list_chats(chat_type="group", reveal_names=true)` 找群，再用返回的代号调用 `read_window(chat="G...", time="2026-11-27T23:59:59+08:00", chat_type="group")`；time 仍取最近消息。
+
+群消息返回稳定成员代号 `member`，显式 `reveal_names=true` 时可返回可用的 `member_name`；未知成员明确标记 unknown。默认仍脱敏，排除名单继续生效。双人统计、规则候选与回复建议仍只面向私聊。旧 MCP 进程需要重启才能加载新增参数；新启动的服务自动使用当前代码。

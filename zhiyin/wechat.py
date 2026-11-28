@@ -22,7 +22,7 @@ from zhiyin.context_metadata import SCHEMA as CONTEXT_SCHEMA
 from zhiyin.local import PrivateFiles
 
 EXPORT = Path.home() / "Documents/knowledge-mcp/private/微信聊天"
-RELATIONSHIPS = ("家人", "朋友", "同事", "办事", "未分类", "其他")
+RELATIONSHIPS = ("家人", "朋友", "同事", "办事", "未分类", "其他", "群聊")
 LEGACY_RELATIONSHIP = "陌生人或办事"
 CHAT_TIMEZONE = timezone(timedelta(hours=8))
 SCHEMA = """
@@ -44,8 +44,9 @@ CREATE INDEX IF NOT EXISTS messages_sender_time ON messages(contact_id, sender, 
 VISIBLE = """
 CREATE TEMP TABLE excluded (value TEXT PRIMARY KEY);
 CREATE TEMP TABLE relationship_config (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-CREATE TEMP VIEW visible_contacts AS
+CREATE TEMP VIEW all_visible_contacts AS
 SELECT c.id, c.code, c.label,
+       (c.relationship='群聊' OR c.id LIKE '%@chatroom') AS is_group,
        coalesce(ri.value, rc.value, rl.value,
                 CASE c.relationship WHEN '陌生人或办事' THEN '办事' ELSE c.relationship END
        ) AS relationship
@@ -59,6 +60,10 @@ LEFT JOIN relationship_config rl ON rl.key=c.label
 WHERE NOT EXISTS (
     SELECT 1 FROM excluded e WHERE e.value IN (c.id, c.code, c.label)
 );
+CREATE TEMP VIEW visible_contacts AS
+SELECT * FROM all_visible_contacts WHERE NOT is_group;
+CREATE TEMP VIEW visible_group_contacts AS
+SELECT * FROM all_visible_contacts WHERE is_group;
 -- Same-second rows follow their original order. A six-hour gap is a new conversation.
 CREATE TEMP VIEW reply_pairs AS
 SELECT m.id, m.contact_id, m.time, m.seq, m.rowid AS position, m.text AS reply, p.id AS prior_id, p.text AS her
@@ -178,7 +183,19 @@ def conversation_sources(root: Path):
             path = (root / folder / "chat.jsonl").resolve()
             if not path.is_relative_to(root):
                 raise ValueError("会话文件超出导出目录")
-            yield (contact_id, code, label, entry.get("relationship", "未分类")), path
+            yield (
+                (
+                    contact_id,
+                    code,
+                    label,
+                    (
+                        "群聊"
+                        if entry.get("chat_type") == "group" or contact_id.endswith("@chatroom")
+                        else entry.get("relationship", "未分类")
+                    ),
+                ),
+                path,
+            )
     else:
         raise ValueError("找不到微信导出清单")
 
@@ -189,13 +206,29 @@ def message_row(contact_id: str, raw: dict, positions: Counter, repeats: Counter
     timestamp = time.timestamp()
     sender, kind, subtype, text = (raw[key] for key in ("sender", "type", "subtype", "text"))
     if (
-        (sender not in {"me", "them"} and not (sender == "unknown" and kind in {10000, 10002}))
+        (
+            sender not in {"me", "them"}
+            and not (
+                sender == "unknown" and (kind in {10000, 10002} or raw.get("chat_type") == "group")
+            )
+        )
         or type(kind) is not int
         or (subtype is not None and type(subtype) is not int)
         or not isinstance(text, str)
     ):
         raise ValueError("会话消息字段无效")
-    signature = json.dumps([contact_id, timestamp, sender, kind, subtype, text], ensure_ascii=False)
+    signature = json.dumps(
+        [
+            contact_id,
+            timestamp,
+            sender,
+            kind,
+            subtype,
+            text,
+            *([raw.get("sender_id")] if raw.get("chat_type") == "group" else []),
+        ],
+        ensure_ascii=False,
+    )
     occurrence = repeats[signature]
     repeats[signature] += 1
     # The export has no row ID. Preserve same-second identical messages within a snapshot.
@@ -213,7 +246,7 @@ def import_wechat(store: WeChatStore, source: Path = EXPORT) -> dict[str, int]:
         if not store._path("config.toml").exists():
             store._write("config.toml", "exclude_contacts = []\n\n[relationships]\n")
         excluded, _ = store.config()
-        db.execute("DELETE FROM contacts WHERE id NOT IN (SELECT id FROM visible_contacts)")
+        db.execute("DELETE FROM contacts WHERE id NOT IN (SELECT id FROM all_visible_contacts)")
         skipped = scanned = added = 0
         for contact, path in conversation_sources(source):
             if excluded.intersection(contact[:3]):
@@ -236,6 +269,14 @@ def import_wechat(store: WeChatStore, source: Path = EXPORT) -> dict[str, int]:
                 "ON CONFLICT(id) DO NOTHING",
                 rows,
             ).rowcount
+            if contact[3] == "群聊":
+                db.executemany(
+                    "INSERT OR REPLACE INTO message_members VALUES (?, ?, ?)",
+                    [
+                        (row[0], raw.get("sender_id"), raw.get("sender_name"))
+                        for row, raw in zip(rows, raw_rows, strict=True)
+                    ],
+                )
             db.executemany(
                 "INSERT OR REPLACE INTO source_lines VALUES (?, ?)",
                 [(row[0], raw["_source_line"]) for row, raw in zip(rows, raw_rows, strict=True)],
@@ -251,6 +292,7 @@ def import_wechat(store: WeChatStore, source: Path = EXPORT) -> dict[str, int]:
         pairs = db.execute("SELECT count(*) FROM reply_pairs").fetchone()[0]
         return {
             "contacts": contacts,
+            "group_chats": db.execute("SELECT count(*) FROM visible_group_contacts").fetchone()[0],
             "messages": messages,
             "reply_pairs": pairs,
             "scanned": scanned,
